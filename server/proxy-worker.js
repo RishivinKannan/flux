@@ -6,6 +6,7 @@ import { fileURLToPath } from 'url';
 import scriptLoader from './lib/script-loader.js';
 import Distributor from './lib/distributor.js';
 import db from './lib/database.js';
+import logger from './lib/logger.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -37,23 +38,23 @@ async function loadConfig() {
         const port = db.getConfig('port') || 4000;
         const requestTimeout = db.getConfig('requestTimeout') || 30000;
         const scriptTimeout = db.getConfig('scriptTimeout') || 5000;
-        
+
         config = {
             port,
             targets,
             requestTimeout,
             scriptTimeout
         };
-        
+
         distributor = new Distributor(config);
-        console.log(`[Proxy Worker] Loaded configuration with ${targets.length} targets`);
+        logger.info(`[Proxy Worker] Loaded configuration with ${targets.length} targets`);
     } catch (err) {
-        console.error('[Proxy Worker] Failed to load config:', err);
+        logger.error('[Proxy Worker] Failed to load config:', err);
     }
 }
 
 async function initialize() {
-    console.log('[Proxy Worker] Initializing...');
+    logger.info('[Proxy Worker] Initializing...');
 
     // Load config
     await loadConfig();
@@ -80,16 +81,17 @@ async function initialize() {
                 body: req.body
             };
 
-            console.log('📡 [Proxy Worker] Broadcasting to all targets...');
+            logger.info('📡 [Proxy Worker] Broadcasting to all targets...');
             const results = await distributor.broadcast(originalRequest, originalRequest);
 
             const duration = Date.now() - startTime;
-            console.log(`✓ [Proxy Worker] Request completed in ${duration}ms`);
+            const targets = Object.keys(results.results).join(', ');
+            console.log(`✓ [Proxy Worker] Request completed in ${duration}ms (Targets: ${targets})`);
 
             res.json(results);
 
         } catch (err) {
-            console.error('✗ [Proxy Worker] Proxy error:', err);
+            logger.error('✗ [Proxy Worker] Proxy error:', err);
             res.status(500).json({
                 error: 'Proxy error',
                 message: err.message
@@ -110,11 +112,11 @@ async function initialize() {
         console.log('\n✨ Proxy Worker Started ✨');
         console.log(`🚀 Listening on port ${PORT}`);
         console.log(`Proxy endpoint: http://localhost:${PORT}/track/*`);
-        
+
         // Poll for configuration changes every 10 seconds
         setInterval(() => {
             loadConfig().catch(err => {
-                console.error('[Proxy Worker] Error reloading config:', err);
+                logger.error('[Proxy Worker] Error reloading config:', err);
             });
         }, 10000);
     });
@@ -122,19 +124,19 @@ async function initialize() {
 
 // Handle graceful shutdown
 process.on('SIGTERM', () => {
-    console.log('\n👋 Gracefully shutting down...');
+    logger.info('\n👋 Gracefully shutting down...');
     db.close();
     process.exit(0);
 });
 
 process.on('SIGINT', () => {
-    console.log('\n👋 Gracefully shutting down...');
+    logger.info('\n👋 Gracefully shutting down...');
     db.close();
     process.exit(0);
 });
 
 // Start the worker
 initialize().catch(err => {
-    console.error('[Proxy Worker] Fatal error:', err);
+    logger.error('[Proxy Worker] Fatal error:', err);
     process.exit(1);
 });

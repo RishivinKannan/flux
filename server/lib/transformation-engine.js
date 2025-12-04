@@ -1,4 +1,5 @@
 import scriptLoader from './script-loader.js';
+import logger from './logger.js';
 
 class TransformationEngine {
     /**
@@ -19,7 +20,7 @@ class TransformationEngine {
         if (scriptName) {
             script = scriptLoader.getScript(scriptName);
             if (!script) {
-                console.warn(`Script "${scriptName}" not found, skipping transformations`);
+                logger.warn(`Script "${scriptName}" not found, skipping transformations`);
                 return result;
             }
         } else {
@@ -39,7 +40,7 @@ class TransformationEngine {
                             continue; // Skip this script if path doesn't match
                         }
                     } catch (err) {
-                        console.warn(`Invalid pathPattern in ${name}: ${err.message}`);
+                        logger.warn(`Invalid pathPattern in ${name}: ${err.message}`);
                         continue;
                     }
                 }
@@ -49,12 +50,12 @@ class TransformationEngine {
                 // We should probably change this to support multiple scripts or just pick the first matching one.
                 // For now, let's pick the first matching one to maintain similar behavior but with filtering.
                 script = scriptLoader.getScript(name);
-                console.log(`Using script: ${name}`);
+                logger.debug(`Using script: ${name}`);
                 break; 
             }
             
             if (!script) {
-                console.log('No matching transformation script found for this path');
+                logger.debug('No matching transformation script found for this path');
                 return result;
             }
         }
@@ -88,7 +89,7 @@ class TransformationEngine {
                 );
             }
         } catch (err) {
-            console.error('Transformation error:', err);
+            logger.error('Transformation error:', err);
             throw err;
         }
 
@@ -103,7 +104,7 @@ class TransformationEngine {
             const result = await fn(data, metadata);
             return result;
         } catch (err) {
-            console.error(`Error in ${fnName}:`, err.message);
+            logger.error(`Error in ${fnName}:`, err.message);
             // Return original data on error
             return data;
         }

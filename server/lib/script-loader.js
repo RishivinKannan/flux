@@ -1,5 +1,6 @@
 import db from './database.js';
 import { VM } from 'vm2';
+import logger from './logger.js';
 
 class ScriptLoader {
   constructor() {
@@ -24,16 +25,16 @@ class ScriptLoader {
   async loadAllScripts() {
     try {
       const scripts = db.getAllScripts();
-      
+
       // Clear current scripts to handle deletions
       const currentScriptNames = new Set(scripts.map(s => s.name));
-      
+
       // Remove scripts that no longer exist
       for (const name of this.scripts.keys()) {
         if (!currentScriptNames.has(name)) {
           this.scripts.delete(name);
           this.scriptMetadata.delete(name);
-          console.log(`🗑️  Script removed: ${name}`);
+          logger.info(`🗑️  Script removed: ${name}`);
         }
       }
 
@@ -42,9 +43,9 @@ class ScriptLoader {
         await this.loadScript(script);
       }
 
-      console.log(`Loaded ${scripts.length} transformation scripts`);
+      logger.info(`Loaded ${scripts.length} transformation scripts`);
     } catch (err) {
-      console.error('Error loading scripts:', err);
+      logger.error('Error loading scripts:', err);
     }
   }
 
@@ -74,18 +75,18 @@ class ScriptLoader {
       const module = context.default || context;
 
       this.scripts.set(scriptData.name, module);
-      
+
       // Store metadata
       this.scriptMetadata.set(scriptData.name, {
         tags: scriptData.tags || [],
         description: scriptData.description || '',
         pathPattern: scriptData.pathPattern || ''
       });
-      
-      // console.log(`✓ Loaded script: ${scriptData.name}`);
+
+      // logger.debug(`✓ Loaded script: ${scriptData.name}`);
       return true;
     } catch (err) {
-      console.error(`✗ Failed to load script ${scriptData.name}:`, err.message);
+      logger.error(`✗ Failed to load script ${scriptData.name}:`, err.message);
       return false;
     }
   }
@@ -94,8 +95,8 @@ class ScriptLoader {
    * Poll database for changes
    */
   startPolling() {
-    console.log('👀 Polling database for script changes...');
-    
+    logger.info('👀 Polling database for script changes...');
+
     setInterval(async () => {
       await this.loadAllScripts();
     }, 5000); // Poll every 5 seconds
@@ -127,10 +128,10 @@ class ScriptLoader {
     }
 
     const matchingScripts = [];
-    
+
     for (const scriptName of this.scripts.keys()) {
       const metadata = this.scriptMetadata.get(scriptName);
-      
+
       if (!metadata || !metadata.tags || metadata.tags.length === 0) {
         // Script has no tags, run for all targets
         matchingScripts.push(scriptName);
@@ -142,7 +143,7 @@ class ScriptLoader {
         }
       }
     }
-    
+
     return matchingScripts;
   }
 

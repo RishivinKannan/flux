@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../services/api';
+import Spinner from '../components/Spinner';
 
 function TargetList() {
     const [targets, setTargets] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [deleting, setDeleting] = useState(false);
     const [error, setError] = useState(null);
     const [deleteConfirm, setDeleteConfirm] = useState(null);
     const navigate = useNavigate();
@@ -28,11 +30,15 @@ function TargetList() {
 
     const handleDelete = async (id) => {
         try {
+            setDeleting(true);
+            setError(null);
             await api.deleteTarget(id);
             setDeleteConfirm(null);
-            loadTargets();
+            await loadTargets();
         } catch (err) {
             setError(err.message);
+        } finally {
+            setDeleting(false);
         }
     };
 
@@ -148,8 +154,15 @@ function TargetList() {
                             <button
                                 className="btn btn-danger"
                                 onClick={() => handleDelete(deleteConfirm.id)}
+                                disabled={deleting}
                             >
-                                Delete
+                                {deleting ? (
+                                    <>
+                                        <Spinner small /> Deleting...
+                                    </>
+                                ) : (
+                                    'Delete'
+                                )}
                             </button>
                         </div>
                     </div>

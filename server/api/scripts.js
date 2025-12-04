@@ -1,233 +1,234 @@
+import express from 'express';
 import db from '../lib/database.js';
 import scriptLoader from '../lib/script-loader.js';
+
+const router = express.Router();
 
 /**
  * Register script management API routes
  */
-export default async function scriptsRoutes(fastify, options) {
 
-    // List all scripts
-    fastify.get('/api/scripts', async (request, reply) => {
-        try {
-            const scripts = db.getAllScripts();
-            return {
-                scripts: scripts.map(s => ({
-                    name: s.name,
-                    filename: `${s.name}.js`, // Keep filename for UI compatibility
-                    modifiedAt: s.updatedAt
-                }))
-            };
-        } catch (err) {
-            reply.code(500).send({ error: err.message });
+// List all scripts
+router.get('/api/scripts', async (req, res) => {
+    try {
+        const scripts = db.getAllScripts();
+        res.json({
+            scripts: scripts.map(s => ({
+                name: s.name,
+                filename: `${s.name}.js`, // Keep filename for UI compatibility
+                modifiedAt: s.updatedAt
+            }))
+        });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Get specific script content
+router.get('/api/scripts/:name', async (req, res) => {
+    try {
+        const { name } = req.params;
+        const script = db.getScript(name);
+
+        if (!script) {
+            return res.status(404).json({ error: 'Script not found' });
         }
-    });
 
-    // Get specific script content
-    fastify.get('/api/scripts/:name', async (request, reply) => {
-        try {
-            const { name } = request.params;
-            const script = db.getScript(name);
+        res.json({
+            name: script.name,
+            content: script.content,
+            metadata: {
+                tags: script.tags || [],
+                description: script.description || '',
+                pathPattern: script.pathPattern || ''
+            },
+            exists: true
+        });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
 
-            if (!script) {
-                return reply.code(404).send({ error: 'Script not found' });
-            }
+// Update script metadata (tags, description)
+router.put('/api/scripts/:name/metadata', async (req, res) => {
+    try {
+        const { name } = req.params;
+        const { tags, description, pathPattern } = req.body;
 
-            return {
-                name: script.name,
-                content: script.content,
-                metadata: {
-                    tags: script.tags || [],
-                    description: script.description || '',
-                    pathPattern: script.pathPattern || ''
-                },
-                exists: true
-            };
-        } catch (err) {
-            reply.code(500).send({ error: err.message });
+        const script = db.getScript(name);
+        if (!script) {
+            return res.status(404).json({ error: 'Script not found' });
         }
-    });
 
-    // Update script metadata (tags, description)
-    fastify.put('/api/scripts/:name/metadata', async (request, reply) => {
-        try {
-            const { name } = request.params;
-            const { tags, description, pathPattern } = request.body;
+        db.updateScript(name, {
+            content: script.content,
+            description: description !== undefined ? description : script.description,
+            tags: tags !== undefined ? tags : script.tags,
+            pathPattern: pathPattern !== undefined ? pathPattern : script.pathPattern
+        });
 
-            const script = db.getScript(name);
-            if (!script) {
-                return reply.code(404).send({ error: 'Script not found' });
-            }
+        // Force reload in script loader
+        await scriptLoader.loadAllScripts();
 
-            db.updateScript(name, {
-                content: script.content,
-                description: description !== undefined ? description : script.description,
-                tags: tags !== undefined ? tags : script.tags,
-                pathPattern: pathPattern !== undefined ? pathPattern : script.pathPattern
-            });
+        res.json({
+            success: true,
+            message: 'Script metadata updated successfully'
+        });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
 
-            // Force reload in script loader
-            await scriptLoader.loadAllScripts();
+// Create new script
+router.post('/api/scripts', async (req, res) => {
+    try {
+        const { name, content } = req.body;
 
-            return {
-                success: true,
-                message: 'Script metadata updated successfully'
-            };
-        } catch (err) {
-            reply.code(500).send({ error: err.message });
+        if (!name || !content) {
+            return res.status(400).json({ error: 'Name and content are required' });
         }
-    });
 
-    // Create new script
-    fastify.post('/api/scripts', async (request, reply) => {
-        try {
-            const { name, content } = request.body;
-
-            if (!name || !content) {
-                return reply.code(400).send({ error: 'Name and content are required' });
-            }
-
-            // Validate script name
-            if (!/^[a-zA-Z0-9_-]+$/.test(name)) {
-                return reply.code(400).send({
-                    error: 'Invalid script name. Use only alphanumeric characters, hyphens, and underscores.'
-                });
-            }
-
-            // Check if already exists
-            const existing = db.getScript(name);
-            if (existing) {
-                return reply.code(409).send({ error: 'Script already exists' });
-            }
-
-            // Validate syntax before saving
-            try {
-                await validateScriptSyntax(content);
-            } catch (validationErr) {
-                return reply.code(400).send({
-                    error: 'Script syntax error',
-                    details: validationErr.message
-                });
-            }
-
-            // Create script in DB
-            db.createScript({
-                name,
-                content,
-                description: '',
-                tags: [],
-                pathPattern: ''
-            });
-
-            // Force reload in script loader
-            await scriptLoader.loadAllScripts();
-
-            return {
-                success: true,
-                message: 'Script created successfully',
-                name
-            };
-        } catch (err) {
-            reply.code(500).send({ error: err.message });
-        }
-    });
-
-    // Update existing script
-    fastify.put('/api/scripts/:name', async (request, reply) => {
-        try {
-            const { name } = request.params;
-            const { content } = request.body;
-
-            if (!content) {
-                return reply.code(400).send({ error: 'Content is required' });
-            }
-
-            const existing = db.getScript(name);
-            if (!existing) {
-                return reply.code(404).send({ error: 'Script not found' });
-            }
-
-            // Validate syntax before saving
-            try {
-                await validateScriptSyntax(content);
-            } catch (validationErr) {
-                return reply.code(400).send({
-                    error: 'Script syntax error',
-                    details: validationErr.message
-                });
-            }
-
-            // Update script in DB
-            db.updateScript(name, {
-                content,
-                description: existing.description,
-                tags: existing.tags,
-                pathPattern: existing.pathPattern
-            });
-
-            // Force reload in script loader
-            await scriptLoader.loadAllScripts();
-
-            return {
-                success: true,
-                message: 'Script updated successfully',
-                name
-            };
-        } catch (err) {
-            reply.code(500).send({ error: err.message });
-        }
-    });
-
-    // Delete script
-    fastify.delete('/api/scripts/:name', async (request, reply) => {
-        try {
-            const { name } = request.params;
-
-            const script = db.getScript(name);
-            if (!script) {
-                return reply.code(404).send({ error: 'Script not found' });
-            }
-
-            db.deleteScript(script.id);
-
-            // Force reload in script loader
-            await scriptLoader.loadAllScripts();
-
-            return {
-                success: true,
-                message: 'Script deleted successfully',
-                name
-            };
-        } catch (err) {
-            reply.code(500).send({ error: err.message });
-        }
-    });
-
-    // Preview transformation (sandbox test)
-    fastify.post('/api/scripts/preview', async (request, reply) => {
-        try {
-            const { scriptName, sampleData } = request.body;
-
-            if (!scriptName) {
-                return reply.code(400).send({ error: 'scriptName is required' });
-            }
-
-            const script = scriptLoader.getScript(scriptName);
-            if (!script) {
-                return reply.code(404).send({ error: 'Script not found' });
-            }
-
-            // Run transformation in sandbox
-            const result = await runInSandbox(script, sampleData || {});
-
-            return result;
-        } catch (err) {
-            reply.code(500).send({
-                error: 'Preview failed',
-                details: err.message
+        // Validate script name
+        if (!/^[a-zA-Z0-9_-]+$/.test(name)) {
+            return res.status(400).json({
+                error: 'Invalid script name. Use only alphanumeric characters, hyphens, and underscores.'
             });
         }
-    });
-}
+
+        // Check if already exists
+        const existing = db.getScript(name);
+        if (existing) {
+            return res.status(409).json({ error: 'Script already exists' });
+        }
+
+        // Validate syntax before saving
+        try {
+            await validateScriptSyntax(content);
+        } catch (validationErr) {
+            return res.status(400).json({
+                error: 'Script syntax error',
+                details: validationErr.message
+            });
+        }
+
+        // Create script in DB
+        db.createScript({
+            name,
+            content,
+            description: '',
+            tags: [],
+            pathPattern: ''
+        });
+
+        // Force reload in script loader
+        await scriptLoader.loadAllScripts();
+
+        res.json({
+            success: true,
+            message: 'Script created successfully',
+            name
+        });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Update existing script
+router.put('/api/scripts/:name', async (req, res) => {
+    try {
+        const { name } = req.params;
+        const { content } = req.body;
+
+        if (!content) {
+            return res.status(400).json({ error: 'Content is required' });
+        }
+
+        const existing = db.getScript(name);
+        if (!existing) {
+            return res.status(404).json({ error: 'Script not found' });
+        }
+
+        // Validate syntax before saving
+        try {
+            await validateScriptSyntax(content);
+        } catch (validationErr) {
+            return res.status(400).json({
+                error: 'Script syntax error',
+                details: validationErr.message
+            });
+        }
+
+        // Update script in DB
+        db.updateScript(name, {
+            content,
+            description: existing.description,
+            tags: existing.tags,
+            pathPattern: existing.pathPattern
+        });
+
+        // Force reload in script loader
+        await scriptLoader.loadAllScripts();
+
+        res.json({
+            success: true,
+            message: 'Script updated successfully',
+            name
+        });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Delete script
+router.delete('/api/scripts/:name', async (req, res) => {
+    try {
+        const { name } = req.params;
+
+        const script = db.getScript(name);
+        if (!script) {
+            return res.status(404).json({ error: 'Script not found' });
+        }
+
+        db.deleteScript(script.id);
+
+        // Force reload in script loader
+        await scriptLoader.loadAllScripts();
+
+        res.json({
+            success: true,
+            message: 'Script deleted successfully',
+            name
+        });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Preview transformation (sandbox test)
+router.post('/api/scripts/preview', async (req, res) => {
+    try {
+        const { scriptName, sampleData } = req.body;
+
+        if (!scriptName) {
+            return res.status(400).json({ error: 'scriptName is required' });
+        }
+
+        const script = scriptLoader.getScript(scriptName);
+        if (!script) {
+            return res.status(404).json({ error: 'Script not found' });
+        }
+
+        // Run transformation in sandbox
+        const result = await runInSandbox(script, sampleData || {});
+
+        res.json(result);
+    } catch (err) {
+        res.status(500).json({
+            error: 'Preview failed',
+            details: err.message
+        });
+    }
+});
 
 /**
  * Validate script syntax by attempting to parse it
@@ -299,3 +300,5 @@ async function runInSandbox(script, sampleData) {
         throw new Error(`Transformation error: ${err.message}`);
     }
 }
+
+export default router;

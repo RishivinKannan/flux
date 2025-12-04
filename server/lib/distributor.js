@@ -1,6 +1,7 @@
 import transformationEngine from './transformation-engine.js';
 import { gunzip, gzip } from 'zlib';
 import { promisify } from 'util';
+import logger from './logger.js';
 
 const gunzipAsync = promisify(gunzip);
 const gzipAsync = promisify(gzip);
@@ -48,7 +49,7 @@ class Distributor {
      */
     async sendToTarget(target, originalRequest, originalReq) {
         try {
-            console.log(`🔄 Transforming for ${target.nickname || target.baseUrl}...`);
+            logger.debug(`🔄 Transforming for ${target.nickname || target.baseUrl}...`);
 
             // Start with original request
             let transformedRequest = {
@@ -61,7 +62,7 @@ class Distributor {
             const scriptLoader = await import('./script-loader.js');
             const matchingScripts = scriptLoader.default.getScriptsForTags(target.tags || []);
 
-            console.log(`  → Running ${matchingScripts.length} script(s): ${matchingScripts.join(', ')}`);
+            logger.debug(`  → Running ${matchingScripts.length} script(s): ${matchingScripts.join(', ')}`);
 
             // Apply each matching script sequentially
             for (const scriptName of matchingScripts) {
@@ -86,36 +87,33 @@ class Distributor {
             };
 
             // Add body for methods that support it
-            if (['POST', 'PUT', 'PATCH'].includes(originalReq.method.toUpperCase())) {
-                if (transformedRequest.body) {
-                    // Check if we need to gzip the body
-                    const isGzipped = transformedRequest.headers['content-encoding'] === 'gzip';
+            if (['POST', 'PUT', 'PATCH'].includes(originalReq.method.toUpperCase()) && transformedRequest.body) {
+                const isGzipped = transformedRequest.headers['content-encoding'] === 'gzip';
 
-                    const jsonBody = JSON.stringify(transformedRequest.body);
+                const jsonBody = JSON.stringify(transformedRequest.body);
 
-                    if (isGzipped) {
-                        // Re-gzip the transformed body
-                        const gzippedBody = await gzipAsync(Buffer.from(jsonBody));
-                        options.body = gzippedBody;
-                        options.headers['Content-Length'] = gzippedBody.length.toString();
-                        options.headers['Content-Encoding'] = 'gzip';
-                        console.log(`  Re-gzipped body: ${jsonBody.length} bytes → ${gzippedBody.length} bytes`);
-                    } else {
-                        // Send as plain JSON
-                        options.body = jsonBody;
-                        options.headers['Content-Type'] = 'application/json';
-                        options.headers['Content-Length'] = Buffer.byteLength(jsonBody).toString();
-                    }
+                if (isGzipped) {
+                    // Re-gzip the transformed body
+                    const gzippedBody = await gzipAsync(Buffer.from(jsonBody));
+                    options.body = gzippedBody;
+                    options.headers['Content-Length'] = gzippedBody.length.toString();
+                    options.headers['Content-Encoding'] = 'gzip';
+                    logger.debug(`  Re-gzipped body: ${jsonBody.length} bytes → ${gzippedBody.length} bytes`);
+                } else {
+                    // Send as plain JSON
+                    options.body = jsonBody;
+                    options.headers['Content-Type'] = 'application/json';
+                    options.headers['Content-Length'] = Buffer.byteLength(jsonBody).toString();
                 }
             }
 
-            console.log(`→ Broadcasting to ${url}`);
-            console.log(`  Method: ${options.method}, Headers:`, JSON.stringify(options.headers, null, 2));
+            logger.info(`→ Broadcasting to ${url}`);
+            logger.debug(`  Method: ${options.method}, Headers:`, JSON.stringify(options.headers, null, 2));
 
             // Send the request
             const response = await fetch(url, options);
 
-            console.log(`✓ Response from ${target.baseUrl}: ${response.status} ${response.statusText}`);
+            logger.info(`✓ Response from ${target.baseUrl}: ${response.status} ${response.statusText}`);
 
             // Parse response
             let body;
@@ -135,11 +133,11 @@ class Distributor {
             };
 
         } catch (err) {
-            console.error(`✗ Failed request to ${target.baseUrl}:`, err.message);
+            logger.error(`✗ Failed request to ${target.baseUrl}:`, err.message);
             if (err.cause) {
-                console.error(`  Cause:`, err.cause);
+                logger.error(`  Cause:`, err.cause);
             }
-            console.error(`  Error details:`, err.stack);
+            logger.error(`  Error details:`, err.stack);
             throw err;
         }
     }
