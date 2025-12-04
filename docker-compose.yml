@@ -1,0 +1,18 @@
+version: '3.8'
+
+services:
+  proxy:
+    build: .
+    image: flux:latest
+    container_name: flux
+    ports:
+      - "4000:4000"
+      - "4001:4001"
+    volumes:
+      # Persist SQLite database and backups
+      - ./server/data:/app/server/data
+      # Optional: Mount scripts for direct editing (if desired, though DB is source of truth now)
+      # - ./server/scripts:/app/server/scripts
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
