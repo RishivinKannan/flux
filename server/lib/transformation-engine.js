@@ -101,8 +101,7 @@ class TransformationEngine {
      */
     async safeExecute(fn, data, fnName, metadata = {}) {
         try {
-            const result = await fn(data, metadata);
-            return result;
+            return await fn(data, metadata);
         } catch (err) {
             logger.error(`Error in ${fnName}:`, err.message);
             // Return original data on error
