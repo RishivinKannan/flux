@@ -87,26 +87,23 @@ class Distributor {
             };
 
             // Add body for methods that support it
-            if (['POST', 'PUT', 'PATCH'].includes(originalReq.method.toUpperCase())) {
-                if (transformedRequest.body) {
-                    // Check if we need to gzip the body
-                    const isGzipped = transformedRequest.headers['content-encoding'] === 'gzip';
+            if (['POST', 'PUT', 'PATCH'].includes(originalReq.method.toUpperCase()) && transformedRequest.body) {
+                const isGzipped = transformedRequest.headers['content-encoding'] === 'gzip';
 
-                    const jsonBody = JSON.stringify(transformedRequest.body);
+                const jsonBody = JSON.stringify(transformedRequest.body);
 
-                    if (isGzipped) {
-                        // Re-gzip the transformed body
-                        const gzippedBody = await gzipAsync(Buffer.from(jsonBody));
-                        options.body = gzippedBody;
-                        options.headers['Content-Length'] = gzippedBody.length.toString();
-                        options.headers['Content-Encoding'] = 'gzip';
-                        logger.debug(`  Re-gzipped body: ${jsonBody.length} bytes → ${gzippedBody.length} bytes`);
-                    } else {
-                        // Send as plain JSON
-                        options.body = jsonBody;
-                        options.headers['Content-Type'] = 'application/json';
-                        options.headers['Content-Length'] = Buffer.byteLength(jsonBody).toString();
-                    }
+                if (isGzipped) {
+                    // Re-gzip the transformed body
+                    const gzippedBody = await gzipAsync(Buffer.from(jsonBody));
+                    options.body = gzippedBody;
+                    options.headers['Content-Length'] = gzippedBody.length.toString();
+                    options.headers['Content-Encoding'] = 'gzip';
+                    logger.debug(`  Re-gzipped body: ${jsonBody.length} bytes → ${gzippedBody.length} bytes`);
+                } else {
+                    // Send as plain JSON
+                    options.body = jsonBody;
+                    options.headers['Content-Type'] = 'application/json';
+                    options.headers['Content-Length'] = Buffer.byteLength(jsonBody).toString();
                 }
             }
 
