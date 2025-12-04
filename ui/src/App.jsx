@@ -5,11 +5,13 @@ import ScriptEditor from './pages/ScriptEditor';
 import PreviewTester from './pages/PreviewTester';
 import TargetList from './pages/TargetList';
 import TargetEditor from './pages/TargetEditor';
+import NavigationProgress from './components/NavigationProgress';
 
 function App() {
     return (
         <Router>
             <div className="app">
+                <NavigationProgress />
                 <header className="header">
                     <div className="header-content">
                         <div className="logo">⚡ FLUX</div>

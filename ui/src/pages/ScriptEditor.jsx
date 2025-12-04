@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import Editor from '@monaco-editor/react';
 import api from '../services/api';
+import Spinner from '../components/Spinner';
 
 const DEFAULT_SCRIPT = `/**
  * Transformation Script
@@ -84,8 +85,20 @@ function ScriptEditor() {
     };
 
     const handleSave = async () => {
+        // Prevent duplicate saves
+        if (saving) {
+            return;
+        }
+
+        // Set saving state immediately for instant UI feedback
+        setSaving(true);
+        setError(null);
+        setSuccess(null);
+
+        // Validate inputs
         if (!scriptName.trim()) {
             setError('Script name is required');
+            setSaving(false);
             return;
         }
 
@@ -93,10 +106,6 @@ function ScriptEditor() {
         const tagsArray = tags.split(',').map(t => t.trim()).filter(t => t.length > 0);
 
         try {
-            setSaving(true);
-            setError(null);
-            setSuccess(null);
-
             if (isEditMode) {
                 await api.updateScript(name, content);
                 // Update metadata separately
@@ -218,9 +227,15 @@ function ScriptEditor() {
                         <button
                             className="btn btn-success btn-small"
                             onClick={handleSave}
-                            disabled={saving}
+                            disabled={saving || loading}
                         >
-                            {saving ? 'Saving...' : '💾 Save'}
+                            {saving ? (
+                                <>
+                                    <Spinner small /> Saving...
+                                </>
+                            ) : (
+                                '💾 Save'
+                            )}
                         </button>
                     </div>
                 </div>

@@ -48,7 +48,8 @@ button {
   transition: all 0.2s;
 }
 
-input, textarea {
+input,
+textarea {
   font-family: inherit;
   background: var(--bg-tertiary);
   color: var(--text-primary);
@@ -58,7 +59,8 @@ input, textarea {
   transition: all 0.2s;
 }
 
-input:focus, textarea:focus {
+input:focus,
+textarea:focus {
   outline: none;
   border-color: var(--accent);
   box-shadow: 0 0 0 3px rgba(138, 180, 248, 0.1);
@@ -325,9 +327,20 @@ input:focus, textarea:focus {
 }
 
 @keyframes dots {
-  0%, 20% { content: '.'; }
-  40% { content: '..'; }
-  60%, 100% { content: '...'; }
+
+  0%,
+  20% {
+    content: '.';
+  }
+
+  40% {
+    content: '..';
+  }
+
+  60%,
+  100% {
+    content: '...';
+  }
 }
 
 /* Empty State */
@@ -430,5 +443,71 @@ input:focus, textarea:focus {
 
   .main {
     padding: 1rem;
+  }
+}
+
+/* Spinner */
+.spinner {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  border: 2px solid transparent;
+  border-top-color: currentColor;
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+}
+
+.spinner-small {
+  width: 14px;
+  height: 14px;
+  border-width: 2px;
+}
+
+@keyframes spin {
+  0% {
+    transform: rotate(0deg);
+  }
+
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+/* Button with spinner */
+.btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Navigation Progress Bar */
+.navigation-progress {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  z-index: 9999;
+  background: transparent;
+}
+
+.navigation-progress-bar {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent), var(--success));
+  box-shadow: 0 0 10px var(--accent);
+  animation: navigationProgress 0.3s ease-out;
+  transform-origin: left;
+}
+
+@keyframes navigationProgress {
+  0% {
+    transform: scaleX(0);
+  }
+
+  50% {
+    transform: scaleX(0.7);
+  }
+
+  100% {
+    transform: scaleX(1);
   }
 }

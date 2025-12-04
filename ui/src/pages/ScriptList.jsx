@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../services/api';
+import Spinner from '../components/Spinner';
 
 function ScriptList() {
   const [scripts, setScripts] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState(null);
   const [deleteConfirm, setDeleteConfirm] = useState(null);
   const navigate = useNavigate();
@@ -47,6 +49,8 @@ function ScriptList() {
 
   const handleDelete = async (name) => {
     try {
+      setDeleting(true);
+      setError(null);
       await api.deleteScript(name);
       setDeleteConfirm(null);
       // Small delay to allow file system to sync and script loader to update
@@ -54,6 +58,8 @@ function ScriptList() {
       await loadScripts();
     } catch (err) {
       setError(err.message);
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -169,8 +175,15 @@ function ScriptList() {
               <button
                 className="btn btn-danger"
                 onClick={() => handleDelete(deleteConfirm)}
+                disabled={deleting}
               >
-                Delete
+                {deleting ? (
+                  <>
+                    <Spinner small /> Deleting...
+                  </>
+                ) : (
+                  'Delete'
+                )}
               </button>
             </div>
           </div>

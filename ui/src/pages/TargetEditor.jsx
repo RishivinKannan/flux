@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import api from '../services/api';
+import Spinner from '../components/Spinner';
 
 function TargetEditor() {
   const { id } = useParams();
@@ -39,8 +40,20 @@ function TargetEditor() {
   };
 
   const handleSave = async () => {
+    // Prevent duplicate saves
+    if (saving) {
+      return;
+    }
+
+    // Set saving state immediately for instant UI feedback
+    setSaving(true);
+    setError(null);
+    setSuccess(null);
+
+    // Validate inputs
     if (!nickname.trim() || !baseUrl.trim()) {
       setError('Nickname and Base URL are required');
+      setSaving(false);
       return;
     }
 
@@ -53,14 +66,11 @@ function TargetEditor() {
       metadata = JSON.parse(metadataJson);
     } catch (err) {
       setError('Invalid JSON in metadata field');
+      setSaving(false);
       return;
     }
 
     try {
-      setSaving(true);
-      setError(null);
-      setSuccess(null);
-
       if (isEditMode) {
         await api.updateTarget(id, { nickname, baseUrl, tags: tagsArray, metadata });
         setSuccess('Target updated successfully!');
@@ -174,9 +184,15 @@ function TargetEditor() {
           <button
             className="btn btn-success"
             onClick={handleSave}
-            disabled={saving}
+            disabled={saving || loading}
           >
-            {saving ? 'Saving...' : '💾 Save Target'}
+            {saving ? (
+              <>
+                <Spinner /> Saving...
+              </>
+            ) : (
+              '💾 Save Target'
+            )}
           </button>
         </div>
       </div>
