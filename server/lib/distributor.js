@@ -126,6 +126,7 @@ class Distributor {
             } else {
                 body = await response.text();
             }
+            console.log('Body', body, response.headers);
 
             return {
                 status: response.status,
