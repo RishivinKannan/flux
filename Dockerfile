@@ -1,5 +1,5 @@
 # Stage 1: Build UI
-FROM node:18-alpine as ui-build
+FROM node:18-alpine AS ui-build
 WORKDIR /app/ui
 COPY ui/package*.json ./
 RUN npm install
