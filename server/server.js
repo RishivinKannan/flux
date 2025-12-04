@@ -12,6 +12,7 @@ import scriptLoader from './lib/script-loader.js';
 import scriptsRoutes from './api/scripts.js';
 import targetsRoutes from './api/targets.js';
 import { Worker } from 'worker_threads';
+import logger from './lib/logger.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -20,7 +21,7 @@ import db from './lib/database.js';
 
 // Initialize Fastify
 const fastify = Fastify({
-    logger: true
+    logger: false // Disable default fastify logger to use our own if needed, or keep it true but it might be noisy
 });
 
 // Enable CORS
@@ -95,7 +96,7 @@ await fastify.register(fastifyStatic, {
 const start = async () => {
     try {
         // Main API/UI server runs on 4001
-        const port = 4001; 
+        const port = 4001;
         await fastify.listen({ port, host: '0.0.0.0' });
 
         console.log('\n✨ Management Server Started ✨');
@@ -107,29 +108,29 @@ const start = async () => {
         // Start Proxy Worker
         console.log('Starting Proxy Worker...');
         const worker = new Worker(path.join(__dirname, 'proxy-worker.js'));
-        
+
         worker.on('message', (msg) => {
-            console.log('[Worker]', msg);
+            logger.info('[Worker]', msg);
         });
 
         worker.on('error', (err) => {
-            console.error('[Worker Error]', err);
+            logger.error('[Worker Error]', err);
         });
 
         worker.on('exit', (code) => {
             if (code !== 0)
-                console.error(new Error(`Worker stopped with exit code ${code}`));
+                logger.error(new Error(`Worker stopped with exit code ${code}`));
         });
 
     } catch (err) {
-        console.error('Failed to start server:', err);
+        logger.error('Failed to start server:', err);
         process.exit(1);
     }
 };
 
 // Handle shutdown gracefully
 process.on('SIGINT', async () => {
-    console.log('\n\n👋 Gracefully shutting down...');
+    logger.info('\n\n👋 Gracefully shutting down...');
     await fastify.close();
     process.exit(0);
 });
