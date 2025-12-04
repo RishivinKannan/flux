@@ -14,29 +14,29 @@ const DEFAULT_SCRIPT = `/**
  */
 
 export default {
-  transformHeaders: (headers) => {
+  transformHeaders: (headers, metadata) => {
     // Add or modify headers
     return {
       ...headers,
-      'X-Custom-Header': 'value'
+      // 'X-Custom-Header': 'value'
     };
   },
 
-  transformParams: (params) => {
+  transformParams: (params, metadata) => {
     // Add or modify query parameters
     return {
       ...params,
-      timestamp: Date.now()
+      // timestamp: Date.now()
     };
   },
 
-  transformBody: (body) => {
+  transformBody: (body, metadata) => {
     // Transform request body
     if (!body) return body;
     
     return {
       ...body,
-      transformed: true
+      // transformed: true
     };
   }
 };
