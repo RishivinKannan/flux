@@ -86,6 +86,33 @@ npm run dev
 - **Management API (Fastify)**: http://localhost:4001 - Manages scripts and targets
 - **Frontend**: http://localhost:5173 - Web UI for configuration
 
+## 🐳 Docker Quick Start
+
+You can quickly start FLUX using the pre-built Docker image:
+
+```bash
+# Pull the image
+docker pull rishivinkannan/flux
+
+# Run the container
+docker run -d \
+  -p 4000:4000 \
+  -p 4001:4001 \
+  --name flux \
+  rishivinkannan/flux
+```
+
+To persist data, mount the data volume:
+
+```bash
+docker run -d \
+  -p 4000:4000 \
+  -p 4001:4001 \
+  -v $(pwd)/server/data:/app/server/data \
+  --name flux \
+  rishivinkannan/flux
+```
+
 ## 🏗️ Architecture
 
 ### Dual-Server Design

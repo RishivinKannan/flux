@@ -1,6 +1,6 @@
 {
     "name": "flux",
-    "version": "2.0.0",
+    "version": "0.1.0",
     "description": "FLUX: Multi-host proxy server with transformation scripts",
     "main": "server.js",
     "type": "module",

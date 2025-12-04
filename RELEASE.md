@@ -205,6 +205,17 @@ All features have been tested:
 
 ## 📦 Installation
 
+You can use the pre-built Docker image or install from source.
+
+### Docker (Recommended)
+
+```bash
+docker pull rishivinkannan/flux
+docker run -d -p 4000:4000 -p 4001:4001 --name flux rishivinkannan/flux
+```
+
+### From Source
+
 ```bash
 # Clone repository
 git clone https://github.com/RishivinKannan/flux.git
