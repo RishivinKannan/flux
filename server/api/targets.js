@@ -1,111 +1,114 @@
+import express from 'express';
 import db from '../lib/database.js';
+
+const router = express.Router();
 
 /**
  * Register target management API routes
  */
-export default async function targetsRoutes(fastify, options) {
 
-  // List all targets
-  fastify.get('/api/targets', async (request, reply) => {
-    try {
-      const targets = db.getAllTargets();
-      return { targets };
-    } catch (err) {
-      reply.code(500).send({ error: err.message });
+// List all targets
+router.get('/api/targets', async (req, res) => {
+  try {
+    const targets = db.getAllTargets();
+    res.json({ targets });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Get specific target
+router.get('/api/targets/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const target = db.getTarget(id);
+
+    if (!target) {
+      return res.status(404).json({ error: 'Target not found' });
     }
-  });
 
-  // Get specific target
-  fastify.get('/api/targets/:id', async (request, reply) => {
-    try {
-      const { id } = request.params;
-      const target = db.getTarget(id);
+    res.json(target);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
-      if (!target) {
-        return reply.code(404).send({ error: 'Target not found' });
-      }
+// Create new target
+router.post('/api/targets', async (req, res) => {
+  try {
+    const { nickname, baseUrl, tags, metadata } = req.body;
 
-      return target;
-    } catch (err) {
-      reply.code(500).send({ error: err.message });
+    if (!nickname || !baseUrl) {
+      return res.status(400).json({ error: 'Nickname and baseUrl are required' });
     }
-  });
 
-  // Create new target
-  fastify.post('/api/targets', async (request, reply) => {
-    try {
-      const { nickname, baseUrl, tags, metadata } = request.body;
+    // Generate unique ID
+    const id = `target-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
-      if (!nickname || !baseUrl) {
-        return reply.code(400).send({ error: 'Nickname and baseUrl are required' });
-      }
+    const newTarget = db.createTarget({
+      id,
+      nickname,
+      baseUrl,
+      tags: tags || [],
+      metadata: metadata || {}
+    });
 
-      // Generate unique ID
-      const id = `target-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    res.json({
+      success: true,
+      message: 'Target created successfully',
+      target: newTarget
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
-      const newTarget = db.createTarget({
-        id,
-        nickname,
-        baseUrl,
-        tags: tags || [],
-        metadata: metadata || {}
-      });
+// Update existing target
+router.put('/api/targets/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { nickname, baseUrl, tags, metadata } = req.body;
 
-      return {
-        success: true,
-        message: 'Target created successfully',
-        target: newTarget
-      };
-    } catch (err) {
-      reply.code(500).send({ error: err.message });
+    const existingTarget = db.getTarget(id);
+    if (!existingTarget) {
+      return res.status(404).json({ error: 'Target not found' });
     }
-  });
 
-  // Update existing target
-  fastify.put('/api/targets/:id', async (request, reply) => {
-    try {
-      const { id } = request.params;
-      const { nickname, baseUrl, tags, metadata } = request.body;
+    const updatedTarget = db.updateTarget(id, {
+      nickname: nickname || existingTarget.nickname,
+      baseUrl: baseUrl || existingTarget.baseUrl,
+      tags: tags !== undefined ? tags : existingTarget.tags,
+      metadata: metadata !== undefined ? metadata : existingTarget.metadata
+    });
 
-      const existingTarget = db.getTarget(id);
-      if (!existingTarget) {
-        return reply.code(404).send({ error: 'Target not found' });
-      }
+    res.json({
+      success: true,
+      message: 'Target updated successfully',
+      target: updatedTarget
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
-      const updatedTarget = db.updateTarget(id, {
-        nickname: nickname || existingTarget.nickname,
-        baseUrl: baseUrl || existingTarget.baseUrl,
-        tags: tags !== undefined ? tags : existingTarget.tags,
-        metadata: metadata !== undefined ? metadata : existingTarget.metadata
-      });
+// Delete target
+router.delete('/api/targets/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
 
-      return {
-        success: true,
-        message: 'Target updated successfully',
-        target: updatedTarget
-      };
-    } catch (err) {
-      reply.code(500).send({ error: err.message });
+    const deleted = db.deleteTarget(id);
+
+    if (!deleted) {
+      return res.status(404).json({ error: 'Target not found' });
     }
-  });
 
-  // Delete target
-  fastify.delete('/api/targets/:id', async (request, reply) => {
-    try {
-      const { id } = request.params;
+    res.json({
+      success: true,
+      message: 'Target deleted successfully'
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
-      const deleted = db.deleteTarget(id);
-
-      if (!deleted) {
-        return reply.code(404).send({ error: 'Target not found' });
-      }
-
-      return {
-        success: true,
-        message: 'Target deleted successfully'
-      };
-    } catch (err) {
-      reply.code(500).send({ error: err.message });
-    }
-  });
-}
+export default router;
