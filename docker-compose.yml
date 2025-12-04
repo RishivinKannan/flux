@@ -1,9 +1,8 @@
 version: '3.8'
 
 services:
-  proxy:
+  flux:
     build: .
-    image: flux:latest
     container_name: flux
     ports:
       - "4000:4000"
