@@ -254,4 +254,4 @@ Special thanks to all contributors who helped make this release possible!
 
 ---
 
-**Full Changelog**: https://github.com/yourorg/flux/compare/v1.0.0...v2.0.0
+**Full Changelog**: https://github.com/RishivinKannan/flux/compare/v1.0.0...v2.0.0

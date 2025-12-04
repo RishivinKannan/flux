@@ -207,7 +207,7 @@ All features have been tested:
 
 ```bash
 # Clone repository
-git clone <repository-url>
+git clone https://github.com/RishivinKannan/flux.git
 cd flux
 
 # Install dependencies
