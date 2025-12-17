@@ -20,18 +20,29 @@ class ResponseSelector {
 
         logger.info(`[Response Selector] Applying strategy: ${config.strategy}`);
 
+        let selectedResponse;
+
         switch (config.strategy) {
             case 'specific':
-                return this.selectSpecificTarget(results, config);
+                selectedResponse = this.selectSpecificTarget(results, config);
+                break;
 
             case 'mock':
-                return this.selectMockResponse(config, results);
+                selectedResponse = this.selectMockResponse(config, results);
+                break;
 
             case 'first':
             default:
                 // Default to first response strategy
-                return this.selectFirstResponse(results, metadata);
+                selectedResponse = this.selectFirstResponse(results, metadata);
+                break;
         }
+
+        // Always include the full results for debugging/logging
+        return {
+            response: selectedResponse,
+            targets: results
+        };
     }
 
     /**
@@ -131,7 +142,7 @@ class ResponseSelector {
 
         // Force OFF: Only return mock if at least one target succeeded
         const entries = Object.entries(results);
-        const hasSuccessfulResponse = entries.some(([_, response]) => 
+        const hasSuccessfulResponse = entries.some(([_, response]) =>
             response.status >= 200 && response.status < 300
         );
 

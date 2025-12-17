@@ -132,7 +132,7 @@ class Distributor {
             };
 
             // Add body for methods that support it
-            if (['POST', 'PUT', 'PATCH'].includes(originalReq.method.toUpperCase()) && transformedRequest.body) {
+            if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(originalReq.method.toUpperCase()) && transformedRequest.body) {
                 const isGzipped = transformedRequest.headers['content-encoding'] === 'gzip';
 
                 const jsonBody = JSON.stringify(transformedRequest.body);
@@ -141,12 +141,34 @@ class Distributor {
                     // Re-gzip the transformed body
                     const gzippedBody = await gzipAsync(Buffer.from(jsonBody));
                     options.body = gzippedBody;
+
+                    // Remove existing content-type/length/encoding to avoid duplicates
+                    const headerKeys = Object.keys(options.headers);
+                    headerKeys.forEach(key => {
+                        if (key.toLowerCase() === 'content-type' ||
+                            key.toLowerCase() === 'content-length' ||
+                            key.toLowerCase() === 'content-encoding') {
+                            delete options.headers[key];
+                        }
+                    });
+
                     options.headers['Content-Length'] = gzippedBody.length.toString();
                     options.headers['Content-Encoding'] = 'gzip';
+                    options.headers['Content-Type'] = 'application/json';
                     logger.debug(`  Re-gzipped body: ${jsonBody.length} bytes → ${gzippedBody.length} bytes`);
                 } else {
                     // Send as plain JSON
                     options.body = jsonBody;
+
+                    // Remove existing content-type/length to avoid duplicates
+                    const headerKeys = Object.keys(options.headers);
+                    headerKeys.forEach(key => {
+                        if (key.toLowerCase() === 'content-type' ||
+                            key.toLowerCase() === 'content-length') {
+                            delete options.headers[key];
+                        }
+                    });
+
                     options.headers['Content-Type'] = 'application/json';
                     options.headers['Content-Length'] = Buffer.byteLength(jsonBody).toString();
                 }
@@ -154,6 +176,8 @@ class Distributor {
 
             logger.info(`→ Broadcasting to ${url}`);
             logger.debug(`  Method: ${options.method}, Headers:`, JSON.stringify(options.headers, null, 2));
+
+
 
             // Send the request
             const response = await fetch(url, options);

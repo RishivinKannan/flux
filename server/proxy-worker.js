@@ -85,10 +85,17 @@ async function initialize() {
             const results = await distributor.broadcast(originalRequest, originalRequest);
 
             const duration = Date.now() - startTime;
-            const targets = Object.keys(results.results).join(', ');
+            const targets = Object.keys(results.targets).join(', ');
             console.log(`✓ [Proxy Worker] Request completed in ${duration}ms (Targets: ${targets})`);
 
-            res.json(results);
+            console.log(results.response.body);
+            // Clean headers that might conflict with the new body
+            const responseHeaders = { ...results.response.headers };
+            delete responseHeaders['content-length'];
+            delete responseHeaders['content-encoding'];
+            delete responseHeaders['transfer-encoding'];
+
+            res.status(results.response.status).set(responseHeaders).json(results.response.body);
 
         } catch (err) {
             logger.error('✗ [Proxy Worker] Proxy error:', err);
