@@ -116,8 +116,8 @@ class ResponseSelector {
             };
         }
 
-        // Check if force is enabled (default: true)
-        const forceEnabled = config.mockForce !== false;
+        // Check if force is enabled (default: false)
+        const forceEnabled = config.mockForce === true;
 
         if (forceEnabled) {
             // Force ON: Always return mock response regardless of target success/failure

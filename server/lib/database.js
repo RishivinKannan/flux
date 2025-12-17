@@ -74,7 +74,7 @@ class DatabaseService {
             }
             if (!columnNames.includes('response_mock_force')) {
                 logger.info('Migrating database: Adding response_mock_force column');
-                this.db.exec("ALTER TABLE scripts ADD COLUMN response_mock_force INTEGER DEFAULT 0");
+                this.db.exec("ALTER TABLE scripts ADD COLUMN response_mock_force INTEGER NOT NULL DEFAULT 0");
             }
             if (!columnNames.includes('response_enabled')) {
                 logger.info('Migrating database: Adding response_enabled column');
@@ -252,7 +252,7 @@ class DatabaseService {
             responseConfig.strategy || 'first',
             responseConfig.targetId || null,
             responseConfig.mockResponse ? JSON.stringify(responseConfig.mockResponse) : null,
-            responseConfig.mockForce !== false ? 1 : 0,
+            responseConfig.mockForce === true ? 1 : 0,
             responseConfig.enabled ? 1 : 0
         );
 
@@ -280,7 +280,7 @@ class DatabaseService {
             responseConfig.strategy || 'first',
             responseConfig.targetId || null,
             responseConfig.mockResponse ? JSON.stringify(responseConfig.mockResponse) : null,
-            responseConfig.mockForce !== false ? 1 : 0,
+            responseConfig.mockForce === true ? 1 : 0,
             responseConfig.enabled ? 1 : 0,
             name
         );

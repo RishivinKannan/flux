@@ -62,5 +62,5 @@ When a request matches a script with response selection enabled, that script's s
 
 - Response config stored in `scripts` table per-script
 - First matching script with enabled config wins
-- Scripts are matched using a path pattern regex
+- Scripts are matched by path pattern regex
 - Backward compatible when disabled
