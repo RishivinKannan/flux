@@ -1,7 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import api from '../services/api';
-import Spinner from '../components/Spinner';
+import { Card, CardHeader, CardTitle, CardContent, CardFooter } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Loader2, Save, ArrowLeft, Info, CheckCircle2 } from "lucide-react";
 
 function TargetEditor() {
   const { id } = useParams();
@@ -40,27 +46,20 @@ function TargetEditor() {
   };
 
   const handleSave = async () => {
-    // Prevent duplicate saves
-    if (saving) {
-      return;
-    }
+    if (saving) return;
 
-    // Set saving state immediately for instant UI feedback
     setSaving(true);
     setError(null);
     setSuccess(null);
 
-    // Validate inputs
     if (!nickname.trim() || !baseUrl.trim()) {
       setError('Nickname and Base URL are required');
       setSaving(false);
       return;
     }
 
-    // Parse tags from comma-separated string
     const tagsArray = tags.split(',').map(t => t.trim()).filter(t => t.length > 0);
 
-    // Validate metadata JSON
     let metadata = {};
     try {
       metadata = JSON.parse(metadataJson);
@@ -88,127 +87,114 @@ function TargetEditor() {
 
   if (loading) {
     return (
-      <div className="container">
-        <div className="loading">Loading target</div>
+      <div className="flex items-center justify-center h-full">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
   }
 
   return (
-    <div className="container">
-      <div className="page-header">
-        <h1 className="page-title">
-          {isEditMode ? `Edit: ${nickname}` : 'Add New Target'}
-        </h1>
-        <p className="page-subtitle">
-          Configure proxy target with custom metadata
-        </p>
+    <div className="container mx-auto py-6 max-w-3xl">
+      <div className="flex items-center justify-between mb-8">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">
+            {isEditMode ? `Edit: ${nickname}` : 'Add New Target'}
+          </h1>
+          <p className="text-muted-foreground mt-2">
+            Configure proxy target with custom metadata
+          </p>
+        </div>
+        <div className="flex items-center gap-4">
+          <Button variant="outline" onClick={() => navigate('/targets')}>
+            <ArrowLeft className="mr-2 h-4 w-4" /> Cancel
+          </Button>
+          <Button onClick={handleSave} disabled={saving}>
+            {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+            Save Target
+          </Button>
+        </div>
       </div>
 
       {error && (
-        <div className="error">
-          <strong>Error:</strong> {error}
-        </div>
+        <Alert variant="destructive" className="mb-6">
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
       )}
 
       {success && (
-        <div className="success">
-          <strong>Success:</strong> {success}
-        </div>
+        <Alert className="mb-6 bg-green-50 text-green-900 border-green-200 dark:bg-green-900/20 dark:text-green-300 dark:border-green-800">
+          <CheckCircle2 className="h-4 w-4" />
+          <AlertDescription>{success}</AlertDescription>
+        </Alert>
       )}
 
-      <div className="card">
-        <div className="form-group">
-          <label htmlFor="nickname">Nickname *</label>
-          <input
-            id="nickname"
-            type="text"
-            value={nickname}
-            onChange={(e) => setNickname(e.target.value)}
-            placeholder="Production API"
-          />
-          <small style={{ color: 'var(--text-secondary)', marginTop: '0.5rem', display: 'block' }}>
-            Friendly name for this target
-          </small>
-        </div>
+      <div className="grid gap-6">
+        <Card>
+          <CardHeader>
+            <CardTitle>Target Details</CardTitle>
+          </CardHeader>
+          <CardContent className="grid gap-4">
+            <div className="grid gap-2">
+              <Label htmlFor="nickname">Nickname <span className="text-destructive">*</span></Label>
+              <Input
+                id="nickname"
+                value={nickname}
+                onChange={(e) => setNickname(e.target.value)}
+                placeholder="Production API"
+              />
+              <p className="text-xs text-muted-foreground">Friendly name for this target</p>
+            </div>
 
-        <div className="form-group">
-          <label htmlFor="baseUrl">Base URL *</label>
-          <input
-            id="baseUrl"
-            type="url"
-            value={baseUrl}
-            onChange={(e) => setBaseUrl(e.target.value)}
-            placeholder="https://api.example.com"
-          />
-          <small style={{ color: 'var(--text-secondary)', marginTop: '0.5rem', display: 'block' }}>
-            Full base URL including protocol
-          </small>
-        </div>
+            <div className="grid gap-2">
+              <Label htmlFor="baseUrl">Base URL <span className="text-destructive">*</span></Label>
+              <Input
+                id="baseUrl"
+                type="url"
+                value={baseUrl}
+                onChange={(e) => setBaseUrl(e.target.value)}
+                placeholder="https://api.example.com"
+              />
+              <p className="text-xs text-muted-foreground">Full base URL including protocol</p>
+            </div>
 
-        <div className="form-group">
-          <label htmlFor="tags">Tags</label>
-          <input
-            id="tags"
-            type="text"
-            value={tags}
-            onChange={(e) => setTags(e.target.value)}
-            placeholder="production, api, v2"
-          />
-          <small style={{ color: 'var(--text-secondary)', marginTop: '0.5rem', display: 'block' }}>
-            Comma-separated tags to control which scripts run for this target
-          </small>
-        </div>
+            <div className="grid gap-2">
+              <Label htmlFor="tags">Tags</Label>
+              <Input
+                id="tags"
+                value={tags}
+                onChange={(e) => setTags(e.target.value)}
+                placeholder="production, api, v2"
+              />
+              <p className="text-xs text-muted-foreground">Comma-separated tags to control which scripts run for this target</p>
+            </div>
 
-        <div className="form-group">
-          <label htmlFor="metadata">Metadata (JSON)</label>
-          <textarea
-            id="metadata"
-            value={metadataJson}
-            onChange={(e) => setMetadataJson(e.target.value)}
-            rows={10}
-            style={{ fontFamily: 'Monaco, monospace', fontSize: '0.9rem' }}
-          />
-          <small style={{ color: 'var(--text-secondary)', marginTop: '0.5rem', display: 'block' }}>
-            Custom metadata accessible in transformation scripts (e.g., licenseKey, apiKey, environment)
-          </small>
-        </div>
+            <div className="grid gap-2">
+              <Label htmlFor="metadata">Metadata (JSON)</Label>
+              <Textarea
+                id="metadata"
+                value={metadataJson}
+                onChange={(e) => setMetadataJson(e.target.value)}
+                rows={10}
+                className="font-mono text-sm"
+              />
+              <p className="text-xs text-muted-foreground">Custom metadata accessible in transformation scripts</p>
+            </div>
+          </CardContent>
+        </Card>
 
-        <div style={{ display: 'flex', gap: '0.5rem', marginTop: '1.5rem' }}>
-          <button
-            className="btn btn-secondary"
-            onClick={() => navigate('/targets')}
-          >
-            Cancel
-          </button>
-          <button
-            className="btn btn-success"
-            onClick={handleSave}
-            disabled={saving || loading}
-          >
-            {saving ? (
-              <>
-                <Spinner /> Saving...
-              </>
-            ) : (
-              '💾 Save Target'
-            )}
-          </button>
-        </div>
-      </div>
-
-      <div className="card" style={{ marginTop: '1rem' }}>
-        <h3 style={{ marginBottom: '1rem' }}>💡 Using Metadata in Transformations</h3>
-        <p style={{ marginBottom: '1rem', color: 'var(--text-secondary)' }}>
-          The metadata is passed as a second parameter to transformation functions:
-        </p>
-        <pre style={{
-          background: 'var(--bg-tertiary)',
-          padding: '1rem',
-          borderRadius: '6px',
-          overflow: 'auto'
-        }}>
-          <code>{`export default {
+        <Card className="bg-muted/30">
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Info className="h-4 w-4" /> Using Metadata in Transformations
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-muted-foreground mb-3">
+              The metadata is passed as a second parameter to transformation functions:
+            </p>
+            <div className="bg-background border rounded-md p-4 overflow-x-auto">
+              <pre className="text-xs font-mono language-javascript">
+                {`export default {
   transformHeaders: (headers, metadata) => ({
     ...headers,
     'Authorization': \`Bearer \${metadata.licenseKey}\`
@@ -219,8 +205,11 @@ function TargetEditor() {
     apiKey: metadata.licenseKey,
     env: metadata.environment
   })
-};`}</code>
-        </pre>
+};`}
+              </pre>
+            </div>
+          </CardContent>
+        </Card>
       </div>
     </div>
   );

@@ -1,7 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../services/api';
-import Spinner from '../components/Spinner';
+import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Loader2, Plus, Pencil, Trash2 } from "lucide-react";
 
 function ScriptList() {
   const [scripts, setScripts] = useState([]);
@@ -20,7 +31,6 @@ function ScriptList() {
       setLoading(true);
       const scriptData = await api.fetchScripts();
 
-      // API now returns objects with {name, filename, modifiedAt}, not just names
       const scriptsWithMeta = await Promise.all(
         scriptData.map(async (scriptObj) => {
           const scriptName = scriptObj.name || scriptObj;
@@ -53,7 +63,6 @@ function ScriptList() {
       setError(null);
       await api.deleteScript(name);
       setDeleteConfirm(null);
-      // Small delay to allow file system to sync and script loader to update
       await new Promise(resolve => setTimeout(resolve, 100));
       await loadScripts();
     } catch (err) {
@@ -63,132 +72,96 @@ function ScriptList() {
     }
   };
 
-  const formatDate = (dateString) => {
-    return new Date(dateString).toLocaleString();
-  };
-
   if (loading) {
     return (
-      <div className="container">
-        <div className="loading">Loading scripts</div>
+      <div className="flex items-center justify-center h-full">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
   }
 
   return (
-    <div className="container">
-      <div className="page-header">
-        <h1 className="page-title">Transformation Scripts</h1>
-        <p className="page-subtitle">
-          Manage and edit your request transformation logic
-        </p>
+    <div className="container mx-auto py-6 max-w-7xl">
+      <div className="flex items-center justify-between mb-8">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Transformation Scripts</h1>
+          <p className="text-muted-foreground mt-2">
+            Manage and edit your request transformation logic
+          </p>
+        </div>
+        <Button onClick={() => navigate('/create')}>
+          <Plus className="mr-2 h-4 w-4" /> Create New Script
+        </Button>
       </div>
 
       {error && (
-        <div className="error">
+        <div className="bg-destructive/15 text-destructive p-4 rounded-md mb-6">
           <strong>Error:</strong> {error}
         </div>
       )}
 
-      <div style={{ marginBottom: '2rem' }}>
-        <button
-          className="btn btn-primary"
-          onClick={() => navigate('/create')}
-        >
-          ➕ Create New Script
-        </button>
-      </div>
-
       {scripts.length === 0 ? (
-        <div className="empty-state">
-          <h3>No scripts found</h3>
-          <p>Create your first transformation script to get started</p>
+        <div className="text-center py-12 border-2 border-dashed rounded-lg">
+          <h3 className="text-lg font-medium">No scripts found</h3>
+          <p className="text-muted-foreground">Create your first transformation script to get started</p>
         </div>
       ) : (
-        <div className="scripts-grid">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {scripts.map((script) => (
-            <div key={script.name} className="card script-card">
-              <div className="script-info">
-                <h3>{script.name}</h3>
+            <Card key={script.name} className="flex flex-col">
+              <CardHeader>
+                <div className="flex justify-between items-start">
+                  <CardTitle className="text-xl">{script.name}</CardTitle>
+                </div>
                 {script.description && (
-                  <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', marginBottom: '0.5rem' }}>
+                  <CardDescription className="line-clamp-2">
                     {script.description}
-                  </p>
+                  </CardDescription>
                 )}
-                {script.tags && script.tags.length > 0 && (
-                  <div style={{ marginTop: '0.5rem', fontSize: '0.85rem' }}>
+              </CardHeader>
+              <CardContent className="flex-1">
+                 {script.tags && script.tags.length > 0 && (
+                  <div className="flex flex-wrap gap-2">
                     {script.tags.map(tag => (
-                      <span key={tag} style={{
-                        display: 'inline-block',
-                        background: 'var(--bg-tertiary)',
-                        padding: '0.2rem 0.5rem',
-                        borderRadius: '4px',
-                        marginRight: '0.25rem',
-                        fontSize: '0.75rem',
-                        color: 'var(--accent)'
-                      }}>
+                      <Badge key={tag} variant="secondary">
                         {tag}
-                      </span>
+                      </Badge>
                     ))}
                   </div>
                 )}
-              </div>
-              <div className="script-actions">
-                <button
-                  className="btn btn-secondary btn-small"
-                  onClick={() => navigate(`/edit/${script.name}`)}
-                >
-                  ✏️ Edit
-                </button>
-                <button
-                  className="btn btn-danger btn-small"
-                  onClick={() => setDeleteConfirm(script.name)}
-                >
-                  🗑️ Delete
-                </button>
-              </div>
-            </div>
+              </CardContent>
+              <CardFooter className="flex justify-end gap-2 pt-4">
+                <Button variant="outline" size="sm" onClick={() => navigate(`/edit/${script.name}`)}>
+                  <Pencil className="h-4 w-4 mr-1" /> Edit
+                </Button>
+                <Button variant="destructive" size="sm" onClick={() => setDeleteConfirm(script.name)}>
+                  <Trash2 className="h-4 w-4 mr-1" /> Delete
+                </Button>
+              </CardFooter>
+            </Card>
           ))}
         </div>
       )}
 
-      {/* Delete Confirmation Modal */}
-      {deleteConfirm && (
-        <div className="modal-overlay" onClick={() => setDeleteConfirm(null)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <h2>Confirm Delete</h2>
-            </div>
-            <div className="modal-body">
-              <p>Are you sure you want to delete <strong>{deleteConfirm}</strong>?</p>
-              <p style={{ color: 'var(--text-secondary)', marginTop: '0.5rem' }}>
-                This action cannot be undone.
-              </p>
-            </div>
-            <div className="modal-footer">
-              <button
-                className="btn btn-secondary"
-                onClick={() => setDeleteConfirm(null)}
-              >
-                Cancel
-              </button>
-              <button
-                className="btn btn-danger"
-                onClick={() => handleDelete(deleteConfirm)}
-                disabled={deleting}
-              >
-                {deleting ? (
-                  <>
-                    <Spinner small /> Deleting...
-                  </>
-                ) : (
-                  'Delete'
-                )}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <Dialog open={!!deleteConfirm} onOpenChange={(open) => !open && setDeleteConfirm(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Confirm Delete</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete <strong>{deleteConfirm}</strong>? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteConfirm(null)}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={() => handleDelete(deleteConfirm)} disabled={deleting}>
+              {deleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              {deleting ? 'Deleting...' : 'Delete'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
