@@ -25,7 +25,7 @@ class ResponseSelector {
                 return this.selectSpecificTarget(results, config);
 
             case 'mock':
-                return this.selectMockResponse(config);
+                return this.selectMockResponse(config, results);
 
             case 'first':
             default:
@@ -100,8 +100,10 @@ class ResponseSelector {
 
     /**
      * Return user-defined mock response
+     * @param {Object} config - Response config with mockResponse and mockForce
+     * @param {Object} results - Aggregated target results for force logic
      */
-    selectMockResponse(config) {
+    selectMockResponse(config, results = {}) {
         if (!config.mockResponse) {
             logger.warn('[Response Selector] No mock response configured, returning default mock');
             return {
@@ -112,14 +114,56 @@ class ResponseSelector {
             };
         }
 
-        logger.info('[Response Selector] Returning mock response');
+        // Check if force is enabled (default: true)
+        const forceEnabled = config.mockForce !== false;
 
+        if (forceEnabled) {
+            // Force ON: Always return mock response regardless of target success/failure
+            logger.info('[Response Selector] Force ON - Returning mock response');
+            return {
+                strategy: 'mock',
+                status: config.mockResponse.status || 200,
+                statusText: config.mockResponse.statusText || 'OK',
+                headers: config.mockResponse.headers || {},
+                body: config.mockResponse.body || {}
+            };
+        }
+
+        // Force OFF: Only return mock if at least one target succeeded
+        const entries = Object.entries(results);
+        const hasSuccessfulResponse = entries.some(([_, response]) => 
+            response.status >= 200 && response.status < 300
+        );
+
+        if (hasSuccessfulResponse) {
+            // At least one target succeeded, return mock
+            logger.info('[Response Selector] Force OFF - At least one target succeeded, returning mock');
+            return {
+                strategy: 'mock',
+                status: config.mockResponse.status || 200,
+                statusText: config.mockResponse.statusText || 'OK',
+                headers: config.mockResponse.headers || {},
+                body: config.mockResponse.body || {}
+            };
+        }
+
+        // No successful responses, return last target response
+        if (entries.length > 0) {
+            const [lastTargetName, lastResponse] = entries[entries.length - 1];
+            logger.info(`[Response Selector] Force OFF - No successful targets, returning last response from: ${lastTargetName}`);
+            return {
+                selectedTarget: lastTargetName,
+                strategy: 'mock-fallback',
+                ...lastResponse
+            };
+        }
+
+        // No results at all, return error
         return {
             strategy: 'mock',
-            status: config.mockResponse.status || 200,
-            statusText: config.mockResponse.statusText || 'OK',
-            headers: config.mockResponse.headers || {},
-            body: config.mockResponse.body || {}
+            status: 503,
+            statusText: 'Service Unavailable',
+            body: { error: 'No target responses available' }
         };
     }
 

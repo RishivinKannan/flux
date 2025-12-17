@@ -74,6 +74,7 @@ function ScriptEditor() {
     const [responseStrategy, setResponseStrategy] = useState('first');
     const [responseTargetId, setResponseTargetId] = useState('');
     const [responseMock, setResponseMock] = useState(DEFAULT_MOCK);
+    const [responseMockForce, setResponseMockForce] = useState(false);
     const [showResponseSection, setShowResponseSection] = useState(false);
 
     useEffect(() => {
@@ -104,6 +105,7 @@ function ScriptEditor() {
                     setResponseEnabled(data.responseConfig.enabled || false);
                     setResponseStrategy(data.responseConfig.strategy || 'first');
                     setResponseTargetId(data.responseConfig.targetId || '');
+                    setResponseMockForce(data.responseConfig.mockForce !== false);
                     if (data.responseConfig.mockResponse) {
                         setResponseMock(JSON.stringify(data.responseConfig.mockResponse, null, 2));
                     }
@@ -158,6 +160,7 @@ function ScriptEditor() {
                 strategy: responseStrategy,
                 targetId: responseTargetId || null,
                 mockResponse: mockResponse,
+                mockForce: responseMockForce,
                 enabled: responseEnabled
             };
 
@@ -409,6 +412,26 @@ function ScriptEditor() {
                                             tabSize: 2
                                         }}
                                     />
+                                </div>
+
+                                {/* Force Toggle */}
+                                <div className="force-toggle-wrapper">
+                                    <div className="force-toggle-header">
+                                        <span className="force-label">⚡ Force Mode</span>
+                                        <div 
+                                            className={`force-toggle-pill ${responseMockForce ? 'active' : ''}`}
+                                            onClick={() => setResponseMockForce(!responseMockForce)}
+                                        >
+                                            <span className={`pill-option ${!responseMockForce ? 'selected' : ''}`}>OFF</span>
+                                            <span className={`pill-option ${responseMockForce ? 'selected' : ''}`}>ON</span>
+                                        </div>
+                                    </div>
+                                    <p className={`force-description ${responseMockForce ? 'force-on' : 'force-off'}`}>
+                                        {responseMockForce 
+                                            ? "🔒 Always return mock response regardless of target status"
+                                            : "🔓 Return mock only if targets succeed, else return last target response"
+                                        }
+                                    </p>
                                 </div>
                             </div>
                         )}

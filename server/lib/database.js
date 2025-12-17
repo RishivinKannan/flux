@@ -38,6 +38,7 @@ class DatabaseService {
                 response_strategy TEXT DEFAULT 'first',
                 response_target_id TEXT,
                 response_mock TEXT,
+                response_mock_force INTEGER DEFAULT 0,
                 response_enabled INTEGER DEFAULT 0,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
@@ -164,9 +165,10 @@ class DatabaseService {
             tags: JSON.parse(row.tags || '[]'),
             pathPattern: row.path_pattern || '',
             responseConfig: {
-                strategy: row.response_strategy || 'all',
+                strategy: row.response_strategy || 'first',
                 targetId: row.response_target_id || null,
                 mockResponse: row.response_mock ? JSON.parse(row.response_mock) : null,
+                mockForce: row.response_mock_force === 1,
                 enabled: row.response_enabled === 1
             },
             createdAt: row.created_at,
@@ -191,9 +193,10 @@ class DatabaseService {
             tags: JSON.parse(row.tags || '[]'),
             pathPattern: row.path_pattern || '',
             responseConfig: {
-                strategy: row.response_strategy || 'all',
+                strategy: row.response_strategy || 'first',
                 targetId: row.response_target_id || null,
                 mockResponse: row.response_mock ? JSON.parse(row.response_mock) : null,
+                mockForce: row.response_mock_force === 1,
                 enabled: row.response_enabled === 1
             },
             createdAt: row.created_at,
@@ -206,8 +209,8 @@ class DatabaseService {
      */
     createScript(data) {
         const stmt = this.db.prepare(`
-            INSERT INTO scripts (name, content, description, tags, path_pattern, response_strategy, response_target_id, response_mock, response_enabled)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO scripts (name, content, description, tags, path_pattern, response_strategy, response_target_id, response_mock, response_mock_force, response_enabled)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `);
 
         const responseConfig = data.responseConfig || {};
@@ -217,9 +220,10 @@ class DatabaseService {
             data.description || '',
             JSON.stringify(data.tags || []),
             data.pathPattern || '',
-            responseConfig.strategy || 'all',
+            responseConfig.strategy || 'first',
             responseConfig.targetId || null,
             responseConfig.mockResponse ? JSON.stringify(responseConfig.mockResponse) : null,
+            responseConfig.mockForce !== false ? 1 : 0,
             responseConfig.enabled ? 1 : 0
         );
 
@@ -233,7 +237,7 @@ class DatabaseService {
         const stmt = this.db.prepare(`
             UPDATE scripts 
             SET content = ?, description = ?, tags = ?, path_pattern = ?, 
-                response_strategy = ?, response_target_id = ?, response_mock = ?, response_enabled = ?,
+                response_strategy = ?, response_target_id = ?, response_mock = ?, response_mock_force = ?, response_enabled = ?,
                 updated_at = CURRENT_TIMESTAMP
             WHERE name = ?
         `);
@@ -244,9 +248,10 @@ class DatabaseService {
             data.description || '',
             JSON.stringify(data.tags || []),
             data.pathPattern || '',
-            responseConfig.strategy || 'all',
+            responseConfig.strategy || 'first',
             responseConfig.targetId || null,
             responseConfig.mockResponse ? JSON.stringify(responseConfig.mockResponse) : null,
+            responseConfig.mockForce !== false ? 1 : 0,
             responseConfig.enabled ? 1 : 0,
             name
         );
