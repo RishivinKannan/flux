@@ -112,7 +112,7 @@ function ScriptEditor() {
                     setResponseEnabled(data.responseConfig.enabled || false);
                     setResponseStrategy(data.responseConfig.strategy || 'first');
                     setResponseTargetId(data.responseConfig.targetId || '');
-                    setResponseMockForce(data.responseConfig.mockForce !== false);
+                    setResponseMockForce(data.responseConfig.mockForce === true);
                     if (data.responseConfig.mockResponse) {
                         setResponseMock(JSON.stringify(data.responseConfig.mockResponse, null, 2));
                     }
@@ -279,7 +279,7 @@ function ScriptEditor() {
 
                 {/* Response Selection */}
                 <Card>
-                    <CardHeader 
+                    <CardHeader
                         className="cursor-pointer hover:bg-muted/50 transition-colors"
                         onClick={() => setShowResponseSection(!showResponseSection)}
                     >
@@ -293,7 +293,7 @@ function ScriptEditor() {
                             {showResponseSection ? <ChevronUp className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}
                         </div>
                     </CardHeader>
-                    
+
                     {showResponseSection && (
                         <CardContent className="grid gap-6 pt-0">
                             <div className="flex items-center space-x-2 border-l-4 border-primary pl-4 py-2 bg-muted/30">
@@ -305,9 +305,9 @@ function ScriptEditor() {
                                 <Label htmlFor="response-enabled" className="font-medium cursor-pointer">Enable Response Selection for this script</Label>
                             </div>
 
-                             {/* Strategy Selection */}
+                            {/* Strategy Selection */}
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                <div 
+                                <div
                                     className={`relative flex flex-col items-center justify-between rounded-md border-2 p-4 hover:bg-muted/50 cursor-pointer transition-all ${responseStrategy === 'specific' ? 'border-primary bg-primary/5' : 'border-muted'}`}
                                     onClick={() => setResponseStrategy('specific')}
                                 >
@@ -319,7 +319,7 @@ function ScriptEditor() {
                                     {responseStrategy === 'specific' && <CheckCircle2 className="absolute top-2 right-2 h-4 w-4 text-primary" />}
                                 </div>
 
-                                <div 
+                                <div
                                     className={`relative flex flex-col items-center justify-between rounded-md border-2 p-4 hover:bg-muted/50 cursor-pointer transition-all ${responseStrategy === 'first' ? 'border-primary bg-primary/5' : 'border-muted'}`}
                                     onClick={() => setResponseStrategy('first')}
                                 >
@@ -331,7 +331,7 @@ function ScriptEditor() {
                                     {responseStrategy === 'first' && <CheckCircle2 className="absolute top-2 right-2 h-4 w-4 text-primary" />}
                                 </div>
 
-                                <div 
+                                <div
                                     className={`relative flex flex-col items-center justify-between rounded-md border-2 p-4 hover:bg-muted/50 cursor-pointer transition-all ${responseStrategy === 'mock' ? 'border-primary bg-primary/5' : 'border-muted'}`}
                                     onClick={() => setResponseStrategy('mock')}
                                 >
@@ -391,7 +391,7 @@ function ScriptEditor() {
                                         <div className="space-y-0.5">
                                             <Label className="text-base">Force Mode</Label>
                                             <p className="text-xs text-muted-foreground">
-                                                {responseMockForce 
+                                                {responseMockForce
                                                     ? "Always return mock response regardless of target status"
                                                     : "Return mock only if targets succeed, else return last target response"
                                                 }
