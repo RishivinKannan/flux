@@ -12,7 +12,7 @@ class TransformationEngine {
         const result = {
             headers: { ...request.headers },
             params: { ...request.params },
-            body: request.body ? JSON.parse(JSON.stringify(request.body)) : null
+            body: (request.headers['content-type'] && request.headers['content-type'].includes('application/json')) ? JSON.parse(JSON.stringify(request.body)) : request.body
         };
 
         // If no script specified, try to use first available or skip
@@ -25,35 +25,13 @@ class TransformationEngine {
             }
         } else {
             const scripts = scriptLoader.getAllScripts();
-            
-            // Filter scripts by path pattern if defined
-            const requestPath = new URL(request.url, 'http://dummy').pathname;
-            
+
             for (const name of scripts) {
-                const metadata = scriptLoader.getScriptMetadata(name);
-                
-                // Check path pattern if specified
-                if (metadata.pathPattern) {
-                    try {
-                        const pattern = new RegExp(metadata.pathPattern);
-                        if (!pattern.test(requestPath)) {
-                            continue; // Skip this script if path doesn't match
-                        }
-                    } catch (err) {
-                        logger.warn(`Invalid pathPattern in ${name}: ${err.message}`);
-                        continue;
-                    }
-                }
-                
-                // Use the first matching script (or all? The original code used only the first one)
-                // The original code: script = scriptLoader.getScript(scripts[0]);
-                // We should probably change this to support multiple scripts or just pick the first matching one.
-                // For now, let's pick the first matching one to maintain similar behavior but with filtering.
                 script = scriptLoader.getScript(name);
                 logger.debug(`Using script: ${name}`);
-                break; 
+                break;
             }
-            
+
             if (!script) {
                 logger.debug('No matching transformation script found for this path');
                 return result;

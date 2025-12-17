@@ -14,8 +14,18 @@ class ResponseSelector {
      */
     selectResponse(results, config, metadata = {}) {
         if (!config || !config.enabled) {
-            // Feature disabled, return all results (backward compatibility)
-            return { results };
+            // Feature disabled, default to returning first available but with proper structure
+            // If we don't pick a response, proxy-worker fails.
+            // So we reuse selectFirstAvailable as a safe default.
+            const defaultResponse = this.selectFirstAvailable(results);
+            return {
+                response: {
+                    selectedTarget: defaultResponse.selectedTarget,
+                    strategy: 'default',
+                    ...defaultResponse
+                },
+                targets: results
+            };
         }
 
         logger.info(`[Response Selector] Applying strategy: ${config.strategy}`);

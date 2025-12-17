@@ -16,14 +16,11 @@ const PORT = 4000;
 
 // Middleware to parse JSON bodies (with loose content-length check)
 app.use(express.json({
-    limit: '50mb',
-    verify: (req, res, buf) => {
-        req.rawBody = buf;
-    }
+    limit: '50mb'
 }));
 
 // Also handle text/plain
-app.use(express.text({ limit: '50mb' }));
+app.use(express.text({ type: ['application/x-ndjson', 'application/logplex-1', 'text/plain'], limit: '50mb' }));
 
 // Handle raw body for other types
 app.use(express.raw({ type: '*/*', limit: '50mb' }));
@@ -88,7 +85,6 @@ async function initialize() {
             const targets = Object.keys(results.targets).join(', ');
             console.log(`✓ [Proxy Worker] Request completed in ${duration}ms (Targets: ${targets})`);
 
-            console.log(results.response.body);
             // Clean headers that might conflict with the new body
             const responseHeaders = { ...results.response.headers };
             delete responseHeaders['content-length'];

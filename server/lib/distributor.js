@@ -100,7 +100,7 @@ class Distributor {
             let transformedRequest = {
                 headers: { ...originalRequest.headers },
                 params: { ...originalRequest.params },
-                body: originalRequest.body ? JSON.parse(JSON.stringify(originalRequest.body)) : null
+                body: originalRequest.body,
             };
 
             // Get all scripts that match this target's tags
@@ -111,6 +111,20 @@ class Distributor {
 
             // Apply each matching script sequentially
             for (const scriptName of matchingScripts) {
+                // Check if script has a path pattern
+                const metadata = scriptLoader.default.getScriptMetadata(scriptName);
+                if (metadata && metadata.pathPattern) {
+                    try {
+                        const regex = new RegExp(metadata.pathPattern);
+                        if (!regex.test(originalReq.path)) {
+                            logger.debug(`  Skipping script ${scriptName} (Path pattern mismatch: ${metadata.pathPattern} vs ${originalReq.path})`);
+                            continue;
+                        }
+                    } catch (err) {
+                        logger.error(`  Invalid path pattern in script ${scriptName}:`, err);
+                    }
+                }
+
                 transformedRequest = await transformationEngine.transform(
                     transformedRequest,
                     scriptName,
@@ -133,45 +147,25 @@ class Distributor {
 
             // Add body for methods that support it
             if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(originalReq.method.toUpperCase()) && transformedRequest.body) {
-                const isGzipped = transformedRequest.headers['content-encoding'] === 'gzip';
 
-                const jsonBody = JSON.stringify(transformedRequest.body);
+                let jsonBody = transformedRequest.body;
 
-                if (isGzipped) {
-                    // Re-gzip the transformed body
-                    const gzippedBody = await gzipAsync(Buffer.from(jsonBody));
-                    options.body = gzippedBody;
-
-                    // Remove existing content-type/length/encoding to avoid duplicates
-                    const headerKeys = Object.keys(options.headers);
-                    headerKeys.forEach(key => {
-                        if (key.toLowerCase() === 'content-type' ||
-                            key.toLowerCase() === 'content-length' ||
-                            key.toLowerCase() === 'content-encoding') {
-                            delete options.headers[key];
-                        }
-                    });
-
-                    options.headers['Content-Length'] = gzippedBody.length.toString();
-                    options.headers['Content-Encoding'] = 'gzip';
-                    options.headers['Content-Type'] = 'application/json';
-                    logger.debug(`  Re-gzipped body: ${jsonBody.length} bytes → ${gzippedBody.length} bytes`);
-                } else {
-                    // Send as plain JSON
-                    options.body = jsonBody;
-
-                    // Remove existing content-type/length to avoid duplicates
-                    const headerKeys = Object.keys(options.headers);
-                    headerKeys.forEach(key => {
-                        if (key.toLowerCase() === 'content-type' ||
-                            key.toLowerCase() === 'content-length') {
-                            delete options.headers[key];
-                        }
-                    });
-
-                    options.headers['Content-Type'] = 'application/json';
-                    options.headers['Content-Length'] = Buffer.byteLength(jsonBody).toString();
+                // If body is an object and NOT a buffer, stringify it
+                if (typeof jsonBody === 'object' && !Buffer.isBuffer(jsonBody)) {
+                    jsonBody = JSON.stringify(jsonBody);
                 }
+
+                // Send as plain JSON
+                options.body = jsonBody;
+
+                // Remove existing content-type/length to avoid duplicates
+                const headerKeys = Object.keys(options.headers);
+                headerKeys.forEach(key => {
+                    if (key.toLowerCase() === 'content-length') {
+                        delete options.headers[key];
+                    }
+                });
+                options.headers['Content-Length'] = Buffer.byteLength(jsonBody).toString();
             }
 
             logger.info(`→ Broadcasting to ${url}`);
@@ -189,7 +183,13 @@ class Distributor {
             const contentType = response.headers.get('content-type');
 
             if (contentType && contentType.includes('application/json')) {
-                body = await response.json();
+                const text = await response.text();
+                try {
+                    body = text ? JSON.parse(text) : {}; // Handle empty body
+                } catch (e) {
+                    logger.warn(`Failed to parse JSON body from ${target.baseUrl}: ${e.message}`);
+                    body = text; // Fallback to text
+                }
             } else {
                 body = await response.text();
             }
