@@ -13,25 +13,27 @@ class ResponseSelector {
      * @returns {Object} Selected response
      */
     selectResponse(results, config, metadata = {}) {
-        if (!config || !config.enabled) {
-            // Feature disabled, return all results (backward compatibility)
-            return { results };
-        }
-
-        logger.info(`[Response Selector] Applying strategy: ${config.strategy}`);
-
-        switch (config.strategy) {
+        // Safe access for logging
+        const strategy = config?.strategy || 'first';
+        logger.info(`[Response Selector] Applying strategy: ${strategy}`);
+        let selectedResponse;
+        // Use the safe variable
+        switch (strategy) {
             case 'specific':
-                return this.selectSpecificTarget(results, config);
-
+                selectedResponse = this.selectSpecificTarget(results, config);
+                break;
             case 'mock':
-                return this.selectMockResponse(config, results);
-
+                selectedResponse = this.selectMockResponse(config, results);
+                break;
             case 'first':
             default:
-                // Default to first response strategy
-                return this.selectFirstResponse(results, metadata);
+                selectedResponse = this.selectFirstResponse(results, metadata);
+                break;
         }
+        return {
+            response: selectedResponse,
+            results: results // KEEPS compatibility with proxy-worker.js (or update proxy-worker.js)
+        };
     }
 
     /**
@@ -131,7 +133,7 @@ class ResponseSelector {
 
         // Force OFF: Only return mock if at least one target succeeded
         const entries = Object.entries(results);
-        const hasSuccessfulResponse = entries.some(([_, response]) => 
+        const hasSuccessfulResponse = entries.some(([_, response]) =>
             response.status >= 200 && response.status < 300
         );
 
