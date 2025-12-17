@@ -2,6 +2,8 @@ import transformationEngine from './transformation-engine.js';
 import { gunzip, gzip } from 'zlib';
 import { promisify } from 'util';
 import logger from './logger.js';
+import responseSelector from './response-selector.js';
+import db from './database.js';
 
 const gunzipAsync = promisify(gunzip);
 const gzipAsync = promisify(gzip);
@@ -16,8 +18,38 @@ class Distributor {
      * Broadcast request to all configured targets simultaneously
      */
     async broadcast(originalRequest, originalReq) {
-        const promises = this.targets.map(target =>
-            this.sendToTarget(target, originalRequest, originalReq)
+        const timestamps = {};
+        const startTime = Date.now();
+
+        // Get matching scripts for this request to find response config
+        const scriptLoader = await import('./script-loader.js');
+        const matchingScriptNames = scriptLoader.default.getScriptsForPath(originalReq.path);
+
+        // Find first script with enabled response config
+        let activeResponseConfig = null;
+        for (const scriptName of matchingScriptNames) {
+            const script = db.getScript(scriptName);
+            if (script && script.responseConfig && script.responseConfig.enabled) {
+                activeResponseConfig = {
+                    ...script.responseConfig,
+                    selectedTargetId: script.responseConfig.targetId  // Alias for compatibility
+                };
+                logger.info(`[Distributor] Using response config from script: ${scriptName}`);
+                break;
+            }
+        }
+
+        const promises = this.targets.map((target, index) =>
+            this.sendToTarget(target, originalRequest, originalReq).then(result => {
+                // Track when this response completed
+                const key = target.nickname || new URL(target.baseUrl).hostname;
+                timestamps[key] = Date.now() - startTime;
+                return { result, target, key };
+            }).catch(error => {
+                const key = target.nickname || new URL(target.baseUrl).hostname;
+                timestamps[key] = Date.now() - startTime;
+                return { error, target, key };
+            })
         );
 
         // Wait for all requests to complete (or fail)
@@ -26,22 +58,35 @@ class Distributor {
         // Aggregate results by nickname or hostname
         const aggregated = {};
 
-        results.forEach((result, index) => {
-            const target = this.targets[index];
-            const key = target.nickname || new URL(target.baseUrl).hostname;
-
+        results.forEach((result) => {
             if (result.status === 'fulfilled') {
-                aggregated[key] = result.value;
+                const { result: targetResult, error, target, key } = result.value;
+
+                if (error) {
+                    aggregated[key] = {
+                        status: 0,
+                        error: error.message,
+                        body: null,
+                        targetId: target.id
+                    };
+                } else {
+                    aggregated[key] = {
+                        ...targetResult,
+                        targetId: target.id
+                    };
+                }
             } else {
-                aggregated[key] = {
-                    status: 0,
-                    error: result.reason.message,
-                    body: null
-                };
+                // This shouldn't happen with the new structure, but handle it anyway
+                logger.error('[Distributor] Unexpected promise rejection:', result.reason);
             }
         });
 
-        return { results: aggregated };
+        // Apply response selection strategy from matching script
+        return responseSelector.selectResponse(
+            aggregated,
+            activeResponseConfig,
+            { timestamps }
+        );
     }
 
     /**

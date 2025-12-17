@@ -148,6 +148,37 @@ class ScriptLoader {
   }
 
   /**
+   * Get scripts that match a given request path
+   * @param {string} requestPath - The request path to match
+   * @returns {Array} Array of script names that match
+   */
+  getScriptsForPath(requestPath = '') {
+    const matchingScripts = [];
+
+    for (const scriptName of this.scripts.keys()) {
+      const metadata = this.scriptMetadata.get(scriptName);
+
+      if (!metadata || !metadata.pathPattern) {
+        // No path pattern, script matches all paths
+        matchingScripts.push(scriptName);
+      } else {
+        // Check if path matches pattern
+        try {
+          const regex = new RegExp(metadata.pathPattern);
+          if (regex.test(requestPath)) {
+            matchingScripts.push(scriptName);
+          }
+        } catch (err) {
+          // Invalid regex, include script anyway
+          matchingScripts.push(scriptName);
+        }
+      }
+    }
+
+    return matchingScripts;
+  }
+
+  /**
    * Get metadata for a specific script
    */
   getScriptMetadata(name) {
