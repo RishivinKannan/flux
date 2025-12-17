@@ -1,7 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../services/api';
-import Spinner from '../components/Spinner';
+import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from "@/components/ui/dialog";
+import { Loader2, Plus, Pencil, Trash2 } from "lucide-react";
 
 function TargetList() {
     const [targets, setTargets] = useState([]);
@@ -44,130 +55,96 @@ function TargetList() {
 
     if (loading) {
         return (
-            <div className="container">
-                <div className="loading">Loading targets</div>
+            <div className="flex items-center justify-center h-full">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
             </div>
         );
     }
 
     return (
-        <div className="container">
-            <div className="page-header">
-                <h1 className="page-title">Proxy Targets</h1>
-                <p className="page-subtitle">
-                    Manage target hosts with custom metadata
-                </p>
+        <div className="container mx-auto py-6 max-w-7xl">
+            <div className="flex items-center justify-between mb-8">
+                <div>
+                    <h1 className="text-3xl font-bold tracking-tight">Proxy Targets</h1>
+                    <p className="text-muted-foreground mt-2">
+                        Manage target hosts with custom metadata
+                    </p>
+                </div>
+                <Button onClick={() => navigate('/targets/create')}>
+                    <Plus className="mr-2 h-4 w-4" /> Add New Target
+                </Button>
             </div>
 
             {error && (
-                <div className="error">
+                <div className="bg-destructive/15 text-destructive p-4 rounded-md mb-6">
                     <strong>Error:</strong> {error}
                 </div>
             )}
 
-            <div style={{ marginBottom: '2rem' }}>
-                <button
-                    className="btn btn-primary"
-                    onClick={() => navigate('/targets/create')}
-                >
-                    ➕ Add New Target
-                </button>
-            </div>
-
             {targets.length === 0 ? (
-                <div className="empty-state">
-                    <h3>No targets configured</h3>
-                    <p>Add your first proxy target to get started</p>
+                <div className="text-center py-12 border-2 border-dashed rounded-lg">
+                    <h3 className="text-lg font-medium">No targets configured</h3>
+                    <p className="text-muted-foreground">Add your first proxy target to get started</p>
                 </div>
             ) : (
-                <div className="scripts-grid">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     {targets.map((target) => (
-                        <div key={target.id} className="card script-card">
-                            <div className="script-info">
-                                <h3>{target.nickname}</h3>
-                                <div className="script-meta">
+                        <Card key={target.id} className="flex flex-col">
+                            <CardHeader>
+                                <CardTitle className="text-xl">{target.nickname}</CardTitle>
+                                <CardDescription className="font-mono text-xs mt-1">
                                     {target.baseUrl}
-                                </div>
+                                </CardDescription>
+                            </CardHeader>
+                            <CardContent className="flex-1">
                                 {target.tags && target.tags.length > 0 && (
-                                    <div style={{ marginTop: '0.5rem', fontSize: '0.85rem' }}>
-                                        <span style={{ color: 'var(--text-secondary)' }}>Tags: </span>
+                                    <div className="flex flex-wrap gap-2 mb-2">
                                         {target.tags.map(tag => (
-                                            <span key={tag} style={{
-                                                display: 'inline-block',
-                                                background: 'var(--bg-tertiary)',
-                                                padding: '0.25rem 0.5rem',
-                                                borderRadius: '4px',
-                                                marginRight: '0.25rem',
-                                                fontSize: '0.8rem',
-                                                color: 'var(--accent)'
-                                            }}>
+                                            <Badge key={tag} variant="secondary">
                                                 {tag}
-                                            </span>
+                                            </Badge>
                                         ))}
                                     </div>
                                 )}
                                 {target.metadata && Object.keys(target.metadata).length > 0 && (
-                                    <div style={{ marginTop: '0.5rem', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
-                                        Metadata: {Object.keys(target.metadata).join(', ')}
+                                    <div className="text-xs text-muted-foreground mt-2">
+                                        <span className="font-semibold">Metadata:</span> {Object.keys(target.metadata).join(', ')}
                                     </div>
                                 )}
-                            </div>
-                            <div className="script-actions">
-                                <button
-                                    className="btn btn-secondary btn-small"
-                                    onClick={() => navigate(`/targets/edit/${target.id}`)}
-                                >
-                                    ✏️ Edit
-                                </button>
-                                <button
-                                    className="btn btn-danger btn-small"
-                                    onClick={() => setDeleteConfirm(target)}
-                                >
-                                    🗑️ Delete
-                                </button>
-                            </div>
-                        </div>
+                            </CardContent>
+                            <CardFooter className="flex justify-end gap-2 pt-4">
+                                <Button variant="outline" size="sm" onClick={() => navigate(`/targets/edit/${target.id}`)}>
+                                    <Pencil className="h-4 w-4 mr-1" /> Edit
+                                </Button>
+                                <Button variant="destructive" size="sm" onClick={() => setDeleteConfirm(target)}>
+                                    <Trash2 className="h-4 w-4 mr-1" /> Delete
+                                </Button>
+                            </CardFooter>
+                        </Card>
                     ))}
                 </div>
             )}
 
             {/* Delete Confirmation Modal */}
-            {deleteConfirm && (
-                <div className="modal-overlay" onClick={() => setDeleteConfirm(null)}>
-                    <div className="modal" onClick={(e) => e.stopPropagation()}>
-                        <div className="modal-header">
-                            <h2>Confirm Delete</h2>
-                        </div>
-                        <div className="modal-body">
-                            <p>Are you sure you want to delete <strong>{deleteConfirm.nickname}</strong>?</p>
-                            <p style={{ color: 'var(--text-secondary)', marginTop: '0.5rem' }}>
-                                This action cannot be undone.
-                            </p>
-                        </div>
-                        <div className="modal-footer">
-                            <button
-                                className="btn btn-secondary"
-                                onClick={() => setDeleteConfirm(null)}
-                            >
-                                Cancel
-                            </button>
-                            <button
-                                className="btn btn-danger"
-                                onClick={() => handleDelete(deleteConfirm.id)}
-                                disabled={deleting}
-                            >
-                                {deleting ? (
-                                    <>
-                                        <Spinner small /> Deleting...
-                                    </>
-                                ) : (
-                                    'Delete'
-                                )}
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
+            <Dialog open={!!deleteConfirm} onOpenChange={(open) => !open && setDeleteConfirm(null)}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Confirm Delete</DialogTitle>
+                        <DialogDescription>
+                            Are you sure you want to delete <strong>{deleteConfirm?.nickname}</strong>? This action cannot be undone.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setDeleteConfirm(null)}>
+                            Cancel
+                        </Button>
+                        <Button variant="destructive" onClick={() => handleDelete(deleteConfirm?.id)} disabled={deleting}>
+                            {deleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                            {deleting ? 'Deleting...' : 'Delete'}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }

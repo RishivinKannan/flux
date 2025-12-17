@@ -2,7 +2,14 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import Editor from '@monaco-editor/react';
 import api from '../services/api';
-import Spinner from '../components/Spinner';
+import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Loader2, Save, FileCode, CheckCircle2, ChevronDown, ChevronUp, Target, Zap, Bot, RefreshCw } from "lucide-react";
 
 const DEFAULT_SCRIPT = `/**
  * Transformation Script
@@ -105,7 +112,7 @@ function ScriptEditor() {
                     setResponseEnabled(data.responseConfig.enabled || false);
                     setResponseStrategy(data.responseConfig.strategy || 'first');
                     setResponseTargetId(data.responseConfig.targetId || '');
-                    setResponseMockForce(data.responseConfig.mockForce !== false);
+                    setResponseMockForce(data.responseConfig.mockForce === true);
                     if (data.responseConfig.mockResponse) {
                         setResponseMock(JSON.stringify(data.responseConfig.mockResponse, null, 2));
                     }
@@ -122,12 +129,8 @@ function ScriptEditor() {
     };
 
     const handleSave = async () => {
-        // Prevent duplicate saves
-        if (saving) {
-            return;
-        }
+        if (saving) return;
 
-        // Set saving state immediately for instant UI feedback
         setSaving(true);
         setError(null);
         setSuccess(null);
@@ -139,7 +142,6 @@ function ScriptEditor() {
             return;
         }
 
-        // Parse mock response if strategy is 'mock'
         let mockResponse = null;
         if (responseStrategy === 'mock' && responseEnabled) {
             try {
@@ -151,11 +153,9 @@ function ScriptEditor() {
             }
         }
 
-        // Parse tags from comma-separated string
         const tagsArray = tags.split(',').map(t => t.trim()).filter(t => t.length > 0);
 
         try {
-            // Build response config
             const responseConfig = {
                 strategy: responseStrategy,
                 targetId: responseTargetId || null,
@@ -166,12 +166,10 @@ function ScriptEditor() {
 
             if (isEditMode) {
                 await api.updateScript(name, content);
-                // Update metadata with response config
                 await api.updateScriptMetadata(name, tagsArray, description, pathPattern, responseConfig);
                 setSuccess('Script updated successfully!');
             } else {
                 await api.createScript(scriptName, content);
-                // Update metadata for new script
                 await api.updateScriptMetadata(scriptName, tagsArray, description, pathPattern, responseConfig);
                 setSuccess('Script created successfully!');
                 setTimeout(() => navigate('/'), 1500);
@@ -185,323 +183,258 @@ function ScriptEditor() {
 
     if (loading) {
         return (
-            <div className="container">
-                <div className="loading">Loading script</div>
+            <div className="flex items-center justify-center h-full">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
             </div>
         );
     }
 
     return (
-        <div className="container">
-            <div className="page-header">
-                <h1 className="page-title">
-                    {isEditMode ? `Edit: ${name}` : 'Create New Script'}
-                </h1>
-                <p className="page-subtitle">
-                    Write JavaScript transformation functions
-                </p>
+        <div className="container mx-auto py-6 max-w-5xl">
+            <div className="flex items-center justify-between mb-8">
+                <div>
+                    <h1 className="text-3xl font-bold tracking-tight">
+                        {isEditMode ? `Edit: ${name}` : 'Create New Script'}
+                    </h1>
+                    <p className="text-muted-foreground mt-2">
+                        Write JavaScript transformation functions
+                    </p>
+                </div>
+                <div className="flex items-center gap-4">
+                    <Button variant="outline" onClick={() => navigate('/')}>Cancel</Button>
+                    <Button onClick={handleSave} disabled={saving}>
+                        {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+                        Save Script
+                    </Button>
+                </div>
             </div>
 
             {error && (
-                <div className="error">
-                    <strong>Error:</strong> {error}
-                </div>
+                <Alert variant="destructive" className="mb-6">
+                    <AlertDescription>{error}</AlertDescription>
+                </Alert>
             )}
 
             {success && (
-                <div className="success">
-                    <strong>Success:</strong> {success}
-                </div>
+                <Alert className="mb-6 bg-green-50 text-green-900 border-green-200 dark:bg-green-900/20 dark:text-green-300 dark:border-green-800">
+                    <CheckCircle2 className="h-4 w-4" />
+                    <AlertDescription>{success}</AlertDescription>
+                </Alert>
             )}
 
-            {/* Script Details Section */}
-            <div className="settings-section">
-                <h2 className="section-title">
-                    <span className="section-icon">📝</span>
-                    Script Details
-                </h2>
-
-                {!isEditMode && (
-                    <div className="form-group">
-                        <label htmlFor="scriptName">Script Name</label>
-                        <input
-                            id="scriptName"
-                            type="text"
-                            value={scriptName}
-                            onChange={(e) => setScriptName(e.target.value)}
-                            placeholder="my-transformation"
-                            pattern="[a-zA-Z0-9_-]+"
-                            className="form-input"
-                        />
-                        <small className="form-hint">
-                            Only alphanumeric characters, hyphens, and underscores allowed
-                        </small>
-                    </div>
-                )}
-
-                <div className="form-row">
-                    <div className="form-group flex-1">
-                        <label htmlFor="tags">Tags</label>
-                        <input
-                            id="tags"
-                            type="text"
-                            value={tags}
-                            onChange={(e) => setTags(e.target.value)}
-                            placeholder="production, api, v2"
-                            className="form-input"
-                        />
-                        <small className="form-hint">
-                            Comma-separated tags - script runs for matching targets
-                        </small>
-                    </div>
-
-                    <div className="form-group flex-1">
-                        <label htmlFor="pathPattern">Path Pattern</label>
-                        <input
-                            id="pathPattern"
-                            type="text"
-                            value={pathPattern}
-                            onChange={(e) => setPathPattern(e.target.value)}
-                            placeholder="^/track/.*"
-                            className="form-input"
-                        />
-                        <small className="form-hint">
-                            Regex pattern to match request paths
-                        </small>
-                    </div>
-                </div>
-
-                <div className="form-group">
-                    <label htmlFor="description">Description</label>
-                    <input
-                        id="description"
-                        type="text"
-                        value={description}
-                        onChange={(e) => setDescription(e.target.value)}
-                        placeholder="Brief description of what this script does"
-                        className="form-input"
-                    />
-                </div>
-            </div>
-
-            {/* Response Selection Section */}
-            <div className="settings-section response-section">
-                <div
-                    className="section-header-toggle"
-                    onClick={() => setShowResponseSection(!showResponseSection)}
-                >
-                    <h2 className="section-title">
-                        <span className="section-icon">🎯</span>
-                        Response Selection
-                        {responseEnabled && <span className="badge badge-active">Active</span>}
-                    </h2>
-                    <span className={`chevron ${showResponseSection ? 'open' : ''}`}>▼</span>
-                </div>
-
-                {showResponseSection && (
-                    <div className="section-content">
-                        <div className="toggle-container">
-                            <label className="toggle-label">
-                                <input
-                                    type="checkbox"
-                                    checked={responseEnabled}
-                                    onChange={(e) => setResponseEnabled(e.target.checked)}
-                                    className="toggle-checkbox"
+            <div className="grid gap-6">
+                {/* Script Details */}
+                <Card>
+                    <CardHeader>
+                        <CardTitle className="flex items-center gap-2">
+                            <FileCode className="h-5 w-5" /> Script Details
+                        </CardTitle>
+                    </CardHeader>
+                    <CardContent className="grid gap-4">
+                        {!isEditMode && (
+                            <div className="grid gap-2">
+                                <Label htmlFor="scriptName">Script Name</Label>
+                                <Input
+                                    id="scriptName"
+                                    value={scriptName}
+                                    onChange={(e) => setScriptName(e.target.value)}
+                                    placeholder="my-transformation"
                                 />
-                                <span className="toggle-switch"></span>
-                                <span className="toggle-text">Enable Response Selection for this script</span>
-                            </label>
-                            <p className="form-hint">
-                                When enabled, this script controls which target response is returned
-                            </p>
-                        </div>
-
-                        <div className="strategy-grid">
-
-                            <div
-                                className={`strategy-card ${responseStrategy === 'specific' ? 'active' : ''}`}
-                                onClick={() => setResponseStrategy('specific')}
-                            >
-                                <div className="strategy-icon">🎯</div>
-                                <div className="strategy-info">
-                                    <strong>Specific Target</strong>
-                                    <p>Return response from one target</p>
-                                </div>
-                                <div className="strategy-check">
-                                    {responseStrategy === 'specific' && '✓'}
-                                </div>
-                            </div>
-
-                            <div
-                                className={`strategy-card ${responseStrategy === 'first' ? 'active' : ''}`}
-                                onClick={() => setResponseStrategy('first')}
-                            >
-                                <div className="strategy-icon">⚡</div>
-                                <div className="strategy-info">
-                                    <strong>First Response</strong>
-                                    <p>Return the fastest response</p>
-                                </div>
-                                <div className="strategy-check">
-                                    {responseStrategy === 'first' && '✓'}
-                                </div>
-                            </div>
-
-                            <div
-                                className={`strategy-card ${responseStrategy === 'mock' ? 'active' : ''}`}
-                                onClick={() => setResponseStrategy('mock')}
-                            >
-                                <div className="strategy-icon">🎭</div>
-                                <div className="strategy-info">
-                                    <strong>Mock Response</strong>
-                                    <p>Return a custom mock</p>
-                                </div>
-                                <div className="strategy-check">
-                                    {responseStrategy === 'mock' && '✓'}
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Specific Target Dropdown */}
-                        {responseStrategy === 'specific' && (
-                            <div className="form-group strategy-config">
-                                <label htmlFor="responseTargetId">Select Target</label>
-                                <select
-                                    id="responseTargetId"
-                                    value={responseTargetId}
-                                    onChange={(e) => setResponseTargetId(e.target.value)}
-                                    className="form-input"
-                                >
-                                    <option value="">-- Select a target --</option>
-                                    {targets
-                                        .filter(target => {
-                                            // Get script tags as array
-                                            const scriptTags = tags.split(',').map(t => t.trim()).filter(t => t.length > 0);
-                                            // If no script tags, show all targets
-                                            if (scriptTags.length === 0) return true;
-                                            // Filter targets that have matching tags
-                                            const targetTags = target.tags || [];
-                                            return scriptTags.some(st => targetTags.includes(st));
-                                        })
-                                        .map(target => (
-                                            <option key={target.id} value={target.id}>
-                                                {target.nickname} ({target.baseUrl})
-                                            </option>
-                                        ))
-                                    }
-                                </select>
+                                <p className="text-xs text-muted-foreground">Only alphanumeric characters, hyphens, and underscores allowed</p>
                             </div>
                         )}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="grid gap-2">
+                                <Label htmlFor="tags">Tags</Label>
+                                <Input
+                                    id="tags"
+                                    value={tags}
+                                    onChange={(e) => setTags(e.target.value)}
+                                    placeholder="production, api, v2"
+                                />
+                                <p className="text-xs text-muted-foreground">Comma-separated tags to match targets</p>
+                            </div>
+                            <div className="grid gap-2">
+                                <Label htmlFor="pathPattern">Path Pattern</Label>
+                                <Input
+                                    id="pathPattern"
+                                    value={pathPattern}
+                                    onChange={(e) => setPathPattern(e.target.value)}
+                                    placeholder="^/track/.*"
+                                />
+                                <p className="text-xs text-muted-foreground">Regex pattern to match request paths</p>
+                            </div>
+                        </div>
+                        <div className="grid gap-2">
+                            <Label htmlFor="description">Description</Label>
+                            <Input
+                                id="description"
+                                value={description}
+                                onChange={(e) => setDescription(e.target.value)}
+                                placeholder="Brief description of what this script does"
+                            />
+                        </div>
+                    </CardContent>
+                </Card>
 
-                        {/* Mock Response Editor */}
-                        {responseStrategy === 'mock' && (
-                            <div className="form-group strategy-config">
-                                <label>Mock Response (JSON)</label>
-                                <div className="mock-editor-container">
-                                    <Editor
-                                        height="200px"
-                                        defaultLanguage="json"
-                                        theme="vs-dark"
-                                        value={responseMock}
-                                        onChange={(value) => setResponseMock(value || '')}
-                                        options={{
-                                            minimap: { enabled: false },
-                                            fontSize: 13,
-                                            lineNumbers: 'on',
-                                            scrollBeyondLastLine: false,
-                                            automaticLayout: true,
-                                            tabSize: 2
-                                        }}
-                                    />
+                {/* Response Selection */}
+                <Card>
+                    <CardHeader
+                        className="cursor-pointer hover:bg-muted/50 transition-colors"
+                        onClick={() => setShowResponseSection(!showResponseSection)}
+                    >
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                                <CardTitle className="flex items-center gap-2">
+                                    <Target className="h-5 w-5" /> Response Selection
+                                </CardTitle>
+                                {responseEnabled && <span className="bg-primary/10 text-primary text-xs px-2 py-1 rounded-full font-medium">Active</span>}
+                            </div>
+                            {showResponseSection ? <ChevronUp className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}
+                        </div>
+                    </CardHeader>
+
+                    {showResponseSection && (
+                        <CardContent className="grid gap-6 pt-0">
+                            <div className="flex items-center space-x-2 border-l-4 border-primary pl-4 py-2 bg-muted/30">
+                                <Switch
+                                    id="response-enabled"
+                                    checked={responseEnabled}
+                                    onCheckedChange={setResponseEnabled}
+                                />
+                                <Label htmlFor="response-enabled" className="font-medium cursor-pointer">Enable Response Selection for this script</Label>
+                            </div>
+
+                            {/* Strategy Selection */}
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <div
+                                    className={`relative flex flex-col items-center justify-between rounded-md border-2 p-4 hover:bg-muted/50 cursor-pointer transition-all ${responseStrategy === 'specific' ? 'border-primary bg-primary/5' : 'border-muted'}`}
+                                    onClick={() => setResponseStrategy('specific')}
+                                >
+                                    <Target className="h-8 w-8 mb-2 text-primary" />
+                                    <div className="text-center">
+                                        <div className="font-bold">Specific Target</div>
+                                        <div className="text-xs text-muted-foreground">Return response from one target</div>
+                                    </div>
+                                    {responseStrategy === 'specific' && <CheckCircle2 className="absolute top-2 right-2 h-4 w-4 text-primary" />}
                                 </div>
 
-                                {/* Force Toggle */}
-                                <div className="force-toggle-wrapper">
-                                    <div className="force-toggle-header">
-                                        <span className="force-label">⚡ Force Mode</span>
-                                        <div 
-                                            className={`force-toggle-pill ${responseMockForce ? 'active' : ''}`}
-                                            onClick={() => setResponseMockForce(!responseMockForce)}
-                                        >
-                                            <span className={`pill-option ${!responseMockForce ? 'selected' : ''}`}>OFF</span>
-                                            <span className={`pill-option ${responseMockForce ? 'selected' : ''}`}>ON</span>
+                                <div
+                                    className={`relative flex flex-col items-center justify-between rounded-md border-2 p-4 hover:bg-muted/50 cursor-pointer transition-all ${responseStrategy === 'first' ? 'border-primary bg-primary/5' : 'border-muted'}`}
+                                    onClick={() => setResponseStrategy('first')}
+                                >
+                                    <Zap className="h-8 w-8 mb-2 text-yellow-500" />
+                                    <div className="text-center">
+                                        <div className="font-bold">First Response</div>
+                                        <div className="text-xs text-muted-foreground">Return the fastest response</div>
+                                    </div>
+                                    {responseStrategy === 'first' && <CheckCircle2 className="absolute top-2 right-2 h-4 w-4 text-primary" />}
+                                </div>
+
+                                <div
+                                    className={`relative flex flex-col items-center justify-between rounded-md border-2 p-4 hover:bg-muted/50 cursor-pointer transition-all ${responseStrategy === 'mock' ? 'border-primary bg-primary/5' : 'border-muted'}`}
+                                    onClick={() => setResponseStrategy('mock')}
+                                >
+                                    <Bot className="h-8 w-8 mb-2 text-purple-500" />
+                                    <div className="text-center">
+                                        <div className="font-bold">Mock Response</div>
+                                        <div className="text-xs text-muted-foreground">Return a custom mock</div>
+                                    </div>
+                                    {responseStrategy === 'mock' && <CheckCircle2 className="absolute top-2 right-2 h-4 w-4 text-primary" />}
+                                </div>
+                            </div>
+
+                            {/* Specific Target Dropdown */}
+                            {responseStrategy === 'specific' && (
+                                <div className="grid gap-2">
+                                    <Label>Select Target</Label>
+                                    <Select value={responseTargetId} onValueChange={setResponseTargetId}>
+                                        <SelectTrigger>
+                                            <SelectValue placeholder="Select a target" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {targets.map(target => (
+                                                <SelectItem key={target.id} value={target.id}>
+                                                    {target.nickname} ({target.baseUrl})
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                            )}
+
+                            {/* Mock Response Editor */}
+                            {responseStrategy === 'mock' && (
+                                <div className="grid gap-4">
+                                    <div className="grid gap-2">
+                                        <Label>Mock Response (JSON)</Label>
+                                        <div className="border rounded-md overflow-hidden">
+                                            <Editor
+                                                height="200px"
+                                                defaultLanguage="json"
+                                                theme="vs-dark"
+                                                value={responseMock}
+                                                onChange={(value) => setResponseMock(value || '')}
+                                                options={{
+                                                    minimap: { enabled: false },
+                                                    fontSize: 13,
+                                                    lineNumbers: 'on',
+                                                    scrollBeyondLastLine: false,
+                                                    automaticLayout: true,
+                                                    tabSize: 2
+                                                }}
+                                            />
                                         </div>
                                     </div>
-                                    <p className={`force-description ${responseMockForce ? 'force-on' : 'force-off'}`}>
-                                        {responseMockForce 
-                                            ? "🔒 Always return mock response regardless of target status"
-                                            : "🔓 Return mock only if targets succeed, else return last target response"
-                                        }
-                                    </p>
+
+                                    <div className="flex items-center justify-between p-4 bg-muted/50 rounded-lg">
+                                        <div className="space-y-0.5">
+                                            <Label className="text-base">Force Mode</Label>
+                                            <p className="text-xs text-muted-foreground">
+                                                {responseMockForce
+                                                    ? "Always return mock response regardless of target status"
+                                                    : "Return mock only if targets succeed, else return last target response"
+                                                }
+                                            </p>
+                                        </div>
+                                        <Switch
+                                            checked={responseMockForce}
+                                            onCheckedChange={setResponseMockForce}
+                                        />
+                                    </div>
                                 </div>
-                            </div>
-                        )}
-                    </div>
-                )}
-            </div>
+                            )}
+                        </CardContent>
+                    )}
+                </Card>
 
-            {/* Code Editor Section */}
-            <div className="settings-section">
-                <h2 className="section-title">
-                    <span className="section-icon">💻</span>
-                    Transformation Code
-                </h2>
-
-                <div className="editor-container">
-                    <div className="editor-header">
-                        <div className="editor-title">
-                            {scriptName || 'untitled'}.js
-                        </div>
-                        <div className="editor-actions">
-                            <button
-                                className="btn btn-secondary btn-small"
-                                onClick={() => navigate('/')}
-                            >
-                                Cancel
-                            </button>
-                            <button
-                                className="btn btn-primary btn-small"
-                                onClick={handleSave}
-                                disabled={saving || loading}
-                            >
-                                {saving ? (
-                                    <>
-                                        <Spinner small /> Saving...
-                                    </>
-                                ) : (
-                                    '💾 Save Script'
-                                )}
-                            </button>
-                        </div>
-                    </div>
-                    <Editor
-                        height="500px"
-                        defaultLanguage="javascript"
-                        theme="vs-dark"
-                        value={content}
-                        onChange={(value) => setContent(value || '')}
-                        options={{
-                            minimap: { enabled: false },
-                            fontSize: 14,
-                            lineNumbers: 'on',
-                            roundedSelection: true,
-                            scrollBeyondLastLine: false,
-                            automaticLayout: true,
-                            tabSize: 2
-                        }}
-                    />
-                </div>
-            </div>
-
-            {/* Tips Section */}
-            <div className="card tips-card">
-                <h3>💡 Tips</h3>
-                <ul>
-                    <li>Export a default object with transformation functions</li>
-                    <li>Each function is optional - only include what you need</li>
-                    <li>Functions receive the original data and should return modified data</li>
-                    <li>Changes are hot-reloaded automatically on the server</li>
-                    <li>Use the Preview Tester to test transformations safely</li>
-                </ul>
+                {/* Code Editor */}
+                <Card className="flex-1 flex flex-col min-h-[500px]">
+                    <CardHeader>
+                        <CardTitle className="flex items-center gap-2">
+                            <FileCode className="h-5 w-5" /> Transformation Code
+                        </CardTitle>
+                        <CardDescription>{scriptName || 'untitled'}.js</CardDescription>
+                    </CardHeader>
+                    <CardContent className="flex-1 p-0 overflow-hidden rounded-b-lg">
+                        <Editor
+                            height="600px"
+                            defaultLanguage="javascript"
+                            theme="vs-dark"
+                            value={content}
+                            onChange={(value) => setContent(value || '')}
+                            options={{
+                                minimap: { enabled: false },
+                                fontSize: 14,
+                                lineNumbers: 'on',
+                                roundedSelection: true,
+                                scrollBeyondLastLine: false,
+                                automaticLayout: true,
+                                tabSize: 2
+                            }}
+                        />
+                    </CardContent>
+                </Card>
             </div>
         </div>
     );

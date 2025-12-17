@@ -43,7 +43,7 @@ router.get('/api/scripts/:name', async (req, res) => {
                 pathPattern: script.pathPattern || ''
             },
             responseConfig: script.responseConfig || {
-                strategy: 'all',
+                strategy: 'first',
                 targetId: null,
                 mockResponse: null,
                 enabled: false

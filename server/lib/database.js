@@ -55,6 +55,35 @@ class DatabaseService {
             CREATE INDEX IF NOT EXISTS idx_scripts_tags ON scripts(tags);
         `);
 
+        // Migration: Add missing columns if they don't exist
+        try {
+            const columns = this.db.pragma('table_info(scripts)');
+            const columnNames = columns.map(c => c.name);
+            
+            if (!columnNames.includes('response_strategy')) {
+                logger.info('Migrating database: Adding response_strategy column');
+                this.db.exec("ALTER TABLE scripts ADD COLUMN response_strategy TEXT DEFAULT 'first'");
+            }
+            if (!columnNames.includes('response_target_id')) {
+                logger.info('Migrating database: Adding response_target_id column');
+                this.db.exec("ALTER TABLE scripts ADD COLUMN response_target_id TEXT");
+            }
+            if (!columnNames.includes('response_mock')) {
+                logger.info('Migrating database: Adding response_mock column');
+                this.db.exec("ALTER TABLE scripts ADD COLUMN response_mock TEXT");
+            }
+            if (!columnNames.includes('response_mock_force')) {
+                logger.info('Migrating database: Adding response_mock_force column');
+                this.db.exec("ALTER TABLE scripts ADD COLUMN response_mock_force INTEGER NOT NULL DEFAULT 0");
+            }
+            if (!columnNames.includes('response_enabled')) {
+                logger.info('Migrating database: Adding response_enabled column');
+                this.db.exec("ALTER TABLE scripts ADD COLUMN response_enabled INTEGER DEFAULT 0");
+            }
+        } catch (err) {
+            logger.error(`Database migration failed: ${err.message}`);
+        }
+
         logger.info('✓ Database initialized');
     }
 
@@ -223,7 +252,7 @@ class DatabaseService {
             responseConfig.strategy || 'first',
             responseConfig.targetId || null,
             responseConfig.mockResponse ? JSON.stringify(responseConfig.mockResponse) : null,
-            responseConfig.mockForce !== false ? 1 : 0,
+            responseConfig.mockForce === true ? 1 : 0,
             responseConfig.enabled ? 1 : 0
         );
 
@@ -251,7 +280,7 @@ class DatabaseService {
             responseConfig.strategy || 'first',
             responseConfig.targetId || null,
             responseConfig.mockResponse ? JSON.stringify(responseConfig.mockResponse) : null,
-            responseConfig.mockForce !== false ? 1 : 0,
+            responseConfig.mockForce === true ? 1 : 0,
             responseConfig.enabled ? 1 : 0,
             name
         );
