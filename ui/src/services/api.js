@@ -62,11 +62,11 @@ class ApiService {
         return response.json();
     }
 
-    async updateScriptMetadata(name, tags, description, pathPattern) {
+    async updateScriptMetadata(name, tags, description, pathPattern, responseConfig) {
         const response = await fetch(`${API_BASE}/scripts/${name}/metadata`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ tags, description, pathPattern })
+            body: JSON.stringify({ tags, description, pathPattern, responseConfig })
         });
         if (!response.ok) {
             const error = await response.json();

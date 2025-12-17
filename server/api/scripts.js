@@ -42,6 +42,12 @@ router.get('/api/scripts/:name', async (req, res) => {
                 description: script.description || '',
                 pathPattern: script.pathPattern || ''
             },
+            responseConfig: script.responseConfig || {
+                strategy: 'all',
+                targetId: null,
+                mockResponse: null,
+                enabled: false
+            },
             exists: true
         });
     } catch (err) {
@@ -53,7 +59,7 @@ router.get('/api/scripts/:name', async (req, res) => {
 router.put('/api/scripts/:name/metadata', async (req, res) => {
     try {
         const { name } = req.params;
-        const { tags, description, pathPattern } = req.body;
+        const { tags, description, pathPattern, responseConfig } = req.body;
 
         const script = db.getScript(name);
         if (!script) {
@@ -64,7 +70,8 @@ router.put('/api/scripts/:name/metadata', async (req, res) => {
             content: script.content,
             description: description !== undefined ? description : script.description,
             tags: tags !== undefined ? tags : script.tags,
-            pathPattern: pathPattern !== undefined ? pathPattern : script.pathPattern
+            pathPattern: pathPattern !== undefined ? pathPattern : script.pathPattern,
+            responseConfig: responseConfig !== undefined ? responseConfig : script.responseConfig
         });
 
         // Force reload in script loader

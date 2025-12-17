@@ -74,6 +74,16 @@ app.get('/api/info', async (req, res) => {
 // Moved to the end to avoid conflict with API routes
 app.use(express.static(path.join(__dirname, '../ui/dist')));
 
+// SPA Catch-all route: For any request that isn't an API call or static file,
+// serve index.html so client-side routing works
+app.get(/.*/, (req, res) => {
+    // Don't intercept API calls that slipped through (shouldn't happen if API routes are registered first)
+    if (req.path.startsWith('/api/')) {
+        return res.status(404).json({ error: 'Endpoint not found' });
+    }
+    res.sendFile(path.join(__dirname, '../ui/dist/index.html'));
+});
+
 // Start server
 const start = async () => {
     try {
