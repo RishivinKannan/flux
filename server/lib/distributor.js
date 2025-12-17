@@ -20,10 +20,10 @@ class Distributor {
     async broadcast(originalRequest, originalReq) {
         const timestamps = {};
         const startTime = Date.now();
-
+        const requestPath = originalReq?.path || "/";
         // Get matching scripts for this request to find response config
         const scriptLoader = await import('./script-loader.js');
-        const matchingScriptNames = scriptLoader.default.getScriptsForPath(originalReq.path);
+        const matchingScriptNames = scriptLoader.default.getScriptsForPath(requestPath);
 
         // Find first script with enabled response config
         let activeResponseConfig = null;
