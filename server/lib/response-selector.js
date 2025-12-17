@@ -13,45 +13,26 @@ class ResponseSelector {
      * @returns {Object} Selected response
      */
     selectResponse(results, config, metadata = {}) {
-        if (!config || !config.enabled) {
-            // Feature disabled, default to returning first available but with proper structure
-            // If we don't pick a response, proxy-worker fails.
-            // So we reuse selectFirstAvailable as a safe default.
-            const defaultResponse = this.selectFirstAvailable(results);
-            return {
-                response: {
-                    selectedTarget: defaultResponse.selectedTarget,
-                    strategy: 'default',
-                    ...defaultResponse
-                },
-                targets: results
-            };
-        }
-
-        logger.info(`[Response Selector] Applying strategy: ${config.strategy}`);
-
+        // Safe access for logging
+        const strategy = config?.strategy || 'first';
+        logger.info(`[Response Selector] Applying strategy: ${strategy}`);
         let selectedResponse;
-
-        switch (config.strategy) {
+        // Use the safe variable
+        switch (strategy) {
             case 'specific':
                 selectedResponse = this.selectSpecificTarget(results, config);
                 break;
-
             case 'mock':
                 selectedResponse = this.selectMockResponse(config, results);
                 break;
-
             case 'first':
             default:
-                // Default to first response strategy
                 selectedResponse = this.selectFirstResponse(results, metadata);
                 break;
         }
-
-        // Always include the full results for debugging/logging
         return {
             response: selectedResponse,
-            targets: results
+            results: results // KEEPS compatibility with proxy-worker.js (or update proxy-worker.js)
         };
     }
 
