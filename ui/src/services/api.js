@@ -127,6 +127,26 @@ class ApiService {
         if (!response.ok) throw new Error('Failed to delete target');
         return response.json();
     }
+
+    // Data Transfer (Import/Export)
+    async exportData() {
+        const response = await fetch(`${API_BASE}/export`);
+        if (!response.ok) throw new Error('Failed to export data');
+        return response.json();
+    }
+
+    async importData(data, mode = 'merge') {
+        const response = await fetch(`${API_BASE}/import`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ data, mode })
+        });
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.error || 'Failed to import data');
+        }
+        return response.json();
+    }
 }
 
 export default new ApiService();

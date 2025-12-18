@@ -1,7 +1,7 @@
 import React from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { cn } from "@/lib/utils";
-import { LayoutDashboard, Target, Play, Menu } from "lucide-react";
+import { LayoutDashboard, Target, Play, Menu, ArrowDownUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ModeToggle } from "@/components/mode-toggle";
 
@@ -38,6 +38,7 @@ export default function Layout({ children }) {
                         <SidebarItem to="/" icon={LayoutDashboard}>Scripts</SidebarItem>
                         <SidebarItem to="/targets" icon={Target}>Targets</SidebarItem>
                         <SidebarItem to="/preview" icon={Play}>Preview Tester</SidebarItem>
+                        <SidebarItem to="/data-transfer" icon={ArrowDownUp}>Data Transfer</SidebarItem>
                     </nav>
                 </div>
                 <div className="mt-auto p-4 border-t shrink-0">

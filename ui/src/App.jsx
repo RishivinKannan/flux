@@ -5,6 +5,7 @@ import ScriptEditor from './pages/ScriptEditor';
 import PreviewTester from './pages/PreviewTester';
 import TargetList from './pages/TargetList';
 import TargetEditor from './pages/TargetEditor';
+import DataTransfer from './pages/DataTransfer';
 import NavigationProgress from './components/NavigationProgress'; // Keeping this if needed, or remove if layout handles it.
 import Layout from './components/Layout';
 import { ThemeProvider } from "./components/theme-provider"
@@ -24,6 +25,7 @@ function App() {
                             <Route path="/targets/create" element={<TargetEditor />} />
                             <Route path="/targets/edit/:id" element={<TargetEditor />} />
                             <Route path="/preview" element={<PreviewTester />} />
+                            <Route path="/data-transfer" element={<DataTransfer />} />
                         </Routes>
                     </Layout>
                 </div>

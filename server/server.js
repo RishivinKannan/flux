@@ -10,6 +10,7 @@ import scriptLoader from './lib/script-loader.js';
 // import Distributor from './lib/distributor.js'; // Moved to worker
 import scriptsRoutes from './api/scripts.js';
 import targetsRoutes from './api/targets.js';
+import dataTransferRoutes from './api/data-transfer.js';
 import { Worker } from 'worker_threads';
 import logger from './lib/logger.js';
 
@@ -35,6 +36,9 @@ app.use(scriptsRoutes);
 
 // Register targets API routes
 app.use(targetsRoutes);
+
+// Register data transfer API routes (export/import)
+app.use(dataTransferRoutes);
 
 // Initialize script loader
 await scriptLoader.initialize();
