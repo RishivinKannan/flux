@@ -34,7 +34,8 @@ class DatabaseService {
         this._redisReady = false;          // live connection state — commands only run while ready
         this._pollTimer = null;
         this._materializing = false;      // true only during the local replace txn (suppresses write-through)
-        this._materializeInFlight = false; // reentrancy guard for the async poll
+        this._materializeInFlight = null; // latest pass; the (non-forced) poll path coalesces onto it
+        this._materializeChain = Promise.resolve(); // serializes passes so two never overlap
         this._lastSeenVersion = null;      // opaque per-write token; null = never synced
         this._lastRedisErrLog = 0;
 
@@ -159,14 +160,16 @@ class DatabaseService {
     }
 
     /**
-     * Create new target
+     * Pure local insert, no Redis involvement at all — not even a guarded
+     * no-op call. Used by createTarget() below AND by _materializeOnce()'s
+     * replace transaction, which must stay fully synchronous (better-sqlite3
+     * transactions cannot contain awaited code).
      */
-    createTarget(data) {
+    _insertTargetRow(data) {
         const stmt = this.db.prepare(`
             INSERT INTO targets (id, nickname, base_url, tags, metadata)
             VALUES (?, ?, ?, ?, ?)
         `);
-
         stmt.run(
             data.id,
             data.nickname,
@@ -174,17 +177,27 @@ class DatabaseService {
             JSON.stringify(data.tags || []),
             JSON.stringify(data.metadata || {})
         );
+    }
 
-        this._syncUpsert(RK.targets, data.id, () => this.getTarget(data.id));
+    /**
+     * Create new target. Awaits the Redis mirror write (when Redis is enabled)
+     * before resolving, so a caller holding the resolved promise knows the
+     * shared state is already updated — no fixed delay needed before the next
+     * read. Only ever called from the main-thread management API; the
+     * proxy-worker thread never mutates targets, so this never touches its path.
+     */
+    async createTarget(data) {
+        this._insertTargetRow(data);
+        await this._syncUpsertAwait(RK.targets, data.id, () => this.getTarget(data.id));
         return this.getTarget(data.id);
     }
 
     /**
-     * Update existing target
+     * Update existing target. Same await-before-resolve guarantee as createTarget.
      */
-    updateTarget(id, data) {
+    async updateTarget(id, data) {
         const stmt = this.db.prepare(`
-            UPDATE targets 
+            UPDATE targets
             SET nickname = ?, base_url = ?, tags = ?, metadata = ?, updated_at = CURRENT_TIMESTAMP
             WHERE id = ?
         `);
@@ -197,18 +210,50 @@ class DatabaseService {
             id
         );
 
-        this._syncUpsert(RK.targets, id, () => this.getTarget(id));
+        await this._syncUpsertAwait(RK.targets, id, () => this.getTarget(id));
         return this.getTarget(id);
     }
 
     /**
-     * Delete target
+     * Delete target. Same await-before-resolve guarantee — the DELETE HTTP
+     * response only goes out once Redis (when enabled) actually reflects the
+     * removal, so an immediate follow-up GET (via getAllTargetsFresh/
+     * getTargetFresh) is guaranteed to see it gone, regardless of which pod
+     * answers it.
+     *
+     * "Did it exist?" is answered by REDIS, not by this pod's local table.
+     * A pod that hasn't materialized the target yet still holds no local row —
+     * gating the HDEL (and the 200/404) on `changes > 0` would skip the Redis
+     * delete entirely and answer 404, which callers read as "already gone"
+     * while the row keeps living in Redis and forwarding traffic. The HDEL
+     * reply count is the authoritative signal.
      */
-    deleteTarget(id) {
-        const stmt = this.db.prepare('DELETE FROM targets WHERE id = ?');
-        const result = stmt.run(id);
-        if (result.changes > 0) this._syncDelete(RK.targets, id);
-        return result.changes > 0;
+    async deleteTarget(id) {
+        const localDeleted = this.db.prepare('DELETE FROM targets WHERE id = ?').run(id).changes > 0;
+        if (this._redisActive()) {
+            const removedFromRedis = await this._syncDeleteAwait(RK.targets, id);
+            return removedFromRedis > 0 || localDeleted;
+        }
+        return localDeleted;
+    }
+
+    /**
+     * Read-fresh variants for the management API's GET routes: force a
+     * synchronous pull from Redis (when enabled) before reading local SQLite,
+     * instead of waiting for the next periodic poll tick. No-op (falls straight
+     * through to the plain local read) when Redis is disabled/not ready — and
+     * always a no-op in the proxy-worker thread, since _redisEnabled is only
+     * ever true on the main thread (see _initRedis's isMainThread guard). The
+     * worker's own getAllTargets()/getConfig() calls are untouched by this.
+     */
+    async getAllTargetsFresh() {
+        await this._materialize(true);
+        return this.getAllTargets();
+    }
+
+    async getTargetFresh(id) {
+        await this._materialize(true);
+        return this.getTarget(id);
     }
 
     // ==================== SCRIPTS ====================
@@ -489,62 +534,121 @@ class DatabaseService {
         });
     }
 
+    /** Redis is configured, connected, and not mid-materialize — safe to command. */
+    _redisActive() {
+        return !!(this._redisEnabled && this._redisReady && this._redis && !this._materializing);
+    }
+
+    /**
+     * Awaited counterpart to _syncUpsert, for callers (target CRUD) that need a
+     * guarantee the Redis write landed before they resolve. Unlike _redisSafe,
+     * errors are NOT swallowed here — they propagate to the caller (the Express
+     * route), which surfaces a real failure instead of reporting success on an
+     * unconfirmed write; flux-sync.js on the control-panel side already retries
+     * a failed delete/create on its next reconcile pass. No-ops under the same
+     * conditions as _redisSafe (Redis disabled/not ready/mid-materialize).
+     */
+    async _syncUpsertAwait(hashKey, field, getObj) {
+        if (!this._redisActive()) return;
+        const obj = getObj();
+        if (obj == null) return;
+        await this._redis.hset(hashKey, String(field), JSON.stringify(obj));
+        await this._redis.set(RK.version, this._newToken());
+    }
+
+    /**
+     * Awaited counterpart to _syncDelete — see _syncUpsertAwait. Returns the
+     * HDEL reply (fields actually removed), which deleteTarget uses as the
+     * authoritative "did this exist?" answer. The version token is only bumped
+     * when something really was removed, so a no-op delete doesn't force every
+     * other pod into a pointless full re-materialize.
+     */
+    async _syncDeleteAwait(hashKey, field) {
+        if (!this._redisActive()) return 0;
+        const removed = await this._redis.hdel(hashKey, String(field));
+        if (removed > 0) await this._redis.set(RK.version, this._newToken());
+        return removed;
+    }
+
     /**
      * Pull the full snapshot from Redis and replace the local cache — but ONLY
      * against a complete, validated snapshot. If the version key is missing
      * (Redis empty/never populated) or ANY read/parse fails, we abort without
      * touching the local tables, so a Redis hiccup can never blank a live pod.
+     *
+     * Two calling modes:
+     *   force=false (the periodic poll) — coalesces onto any pass already in
+     *     flight; it has no freshness requirement, so joining is free.
+     *   force=true (the on-demand fresh reads) — MUST run a pass that begins
+     *     after this call. It may never join an in-flight pass: that pass could
+     *     have issued its `GET version` before the caller's write landed, so
+     *     joining it can return provably stale data — the exact bug these fresh
+     *     reads exist to prevent.
+     * Either way passes are serialized through _materializeChain, so two
+     * replace transactions can never interleave and apply snapshots out of order.
      */
-    async _materialize() {
-        if (!this._redisEnabled || !this._redisReady || !this._redis || this._materializeInFlight) return;
-        this._materializeInFlight = true;
+    _materialize(force = false) {
+        if (!this._redisEnabled || !this._redisReady || !this._redis) return Promise.resolve();
+        if (!force && this._materializeInFlight) return this._materializeInFlight;
+
+        const run = this._materializeChain.then(() => this._materializeOnce());
+        // the chain must never be left in a rejected state, or every later pass
+        // would short-circuit; callers get `run` itself and handle their own errors
+        this._materializeChain = run.catch(() => {});
+        this._materializeInFlight = run;
+        this._materializeChain.then(() => {
+            if (this._materializeInFlight === run) this._materializeInFlight = null;
+        });
+        return run;
+    }
+
+    async _materializeOnce() {
+        let version, targetsH, scriptsH, configH;
         try {
-            let version, targetsH, scriptsH, configH;
-            try {
-                version = await this._redis.get(RK.version);
-                if (version === null) return;            // Redis empty/wiped — keep local (fail-safe)
-                if (version === this._lastSeenVersion) return; // token unchanged — nothing new
-                // fetch EVERYTHING before touching local state
-                [targetsH, scriptsH, configH] = await Promise.all([
-                    this._redis.hgetall(RK.targets),
-                    this._redis.hgetall(RK.scripts),
-                    this._redis.hgetall(RK.config),
-                ]);
-            } catch (err) {
-                this._logRedisError(err);
-                return; // read failed — DO NOT touch local state
-            }
+            version = await this._redis.get(RK.version);
+            if (version === null) return;            // Redis empty/wiped — keep local (fail-safe)
+            if (version === this._lastSeenVersion) return; // token unchanged — nothing new
+            // fetch EVERYTHING before touching local state
+            [targetsH, scriptsH, configH] = await Promise.all([
+                this._redis.hgetall(RK.targets),
+                this._redis.hgetall(RK.scripts),
+                this._redis.hgetall(RK.config),
+            ]);
+        } catch (err) {
+            this._logRedisError(err);
+            return; // read failed — DO NOT touch local state
+        }
 
-            // parse the whole snapshot in memory; any parse error aborts cleanly
-            let targets, scripts, config;
-            try {
-                targets = Object.values(targetsH || {}).map((s) => JSON.parse(s));
-                scripts = Object.values(scriptsH || {}).map((s) => JSON.parse(s));
-                config = Object.fromEntries(Object.entries(configH || {}).map(([k, v]) => [k, JSON.parse(v)]));
-            } catch (err) {
-                logger.error('[Redis] snapshot parse failed, keeping local state:', err?.message);
-                return;
-            }
+        // parse the whole snapshot in memory; any parse error aborts cleanly
+        let targets, scripts, config;
+        try {
+            targets = Object.values(targetsH || {}).map((s) => JSON.parse(s));
+            scripts = Object.values(scriptsH || {}).map((s) => JSON.parse(s));
+            config = Object.fromEntries(Object.entries(configH || {}).map(([k, v]) => [k, JSON.parse(v)]));
+        } catch (err) {
+            logger.error('[Redis] snapshot parse failed, keeping local state:', err?.message);
+            return;
+        }
 
-            // atomic local replace (readers see old-or-new, never partial)
-            try {
-                this._materializing = true;
-                const apply = this.db.transaction(() => {
-                    this.db.exec('DELETE FROM targets; DELETE FROM scripts; DELETE FROM config;');
-                    for (const t of targets) this.createTarget(t);
-                    for (const s of scripts) this.createScript(s);
-                    for (const [k, v] of Object.entries(config)) this.setConfig(k, v);
-                });
-                apply();
-                this._lastSeenVersion = version;
-                logger.info(`[Redis] synced local cache (${version}): ${targets.length} targets, ${scripts.length} scripts`);
-            } catch (err) {
-                logger.error('[Redis] materialize transaction failed, local state unchanged:', err?.message);
-            } finally {
-                this._materializing = false;
-            }
+        // atomic local replace (readers see old-or-new, never partial). Uses
+        // _insertTargetRow rather than the (now async) createTarget — a
+        // better-sqlite3 transaction must run fully synchronously, and
+        // createTarget's awaited Redis mirror would otherwise suspend mid-loop.
+        try {
+            this._materializing = true;
+            const apply = this.db.transaction(() => {
+                this.db.exec('DELETE FROM targets; DELETE FROM scripts; DELETE FROM config;');
+                for (const t of targets) this._insertTargetRow(t);
+                for (const s of scripts) this.createScript(s);
+                for (const [k, v] of Object.entries(config)) this.setConfig(k, v);
+            });
+            apply();
+            this._lastSeenVersion = version;
+            logger.info(`[Redis] synced local cache (${version}): ${targets.length} targets, ${scripts.length} scripts`);
+        } catch (err) {
+            logger.error('[Redis] materialize transaction failed, local state unchanged:', err?.message);
         } finally {
-            this._materializeInFlight = false;
+            this._materializing = false;
         }
     }
 

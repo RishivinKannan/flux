@@ -8,10 +8,11 @@ const router = express.Router();
  * Register target management API routes
  */
 
-// List all targets
+// List all targets. Reads fresh from Redis first (when enabled) so this never
+// serves a stale pod-local snapshot right after another pod's write.
 router.get('/api/targets', async (req, res) => {
   try {
-    const targets = db.getAllTargets();
+    const targets = await db.getAllTargetsFresh();
     res.json({ targets });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -22,7 +23,7 @@ router.get('/api/targets', async (req, res) => {
 router.get('/api/targets/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const target = db.getTarget(id);
+    const target = await db.getTargetFresh(id);
 
     if (!target) {
       return res.status(404).json({ error: 'Target not found' });
@@ -46,7 +47,7 @@ router.post('/api/targets', async (req, res) => {
     // Generate unique ID
     const id = `target-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
-    const newTarget = db.createTarget({
+    const newTarget = await db.createTarget({
       id,
       nickname,
       baseUrl,
@@ -72,17 +73,25 @@ router.put('/api/targets/:id', async (req, res) => {
     const { id } = req.params;
     const { nickname, baseUrl, tags, metadata } = req.body;
 
-    const existingTarget = db.getTarget(id);
+    // Fresh read: a stale 404 here is not harmless — callers respond to it by
+    // re-creating the target, which duplicates a row that still exists in Redis.
+    const existingTarget = await db.getTargetFresh(id);
     if (!existingTarget) {
       return res.status(404).json({ error: 'Target not found' });
     }
 
-    const updatedTarget = db.updateTarget(id, {
+    const updatedTarget = await db.updateTarget(id, {
       nickname: nickname || existingTarget.nickname,
       baseUrl: baseUrl || existingTarget.baseUrl,
       tags: tags !== undefined ? tags : existingTarget.tags,
       metadata: metadata !== undefined ? metadata : existingTarget.metadata
     });
+
+    // vanished between the fresh read and the write (deleted concurrently on
+    // another pod) — report it honestly rather than 200-ing with a null target
+    if (!updatedTarget) {
+      return res.status(404).json({ error: 'Target not found' });
+    }
 
     logger.info(`[API] Target updated: "${updatedTarget.nickname}" (${id})`);
 
@@ -101,7 +110,7 @@ router.delete('/api/targets/:id', async (req, res) => {
   try {
     const { id } = req.params;
 
-    const deleted = db.deleteTarget(id);
+    const deleted = await db.deleteTarget(id);
 
     if (!deleted) {
       return res.status(404).json({ error: 'Target not found' });

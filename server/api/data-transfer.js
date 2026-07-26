@@ -104,7 +104,7 @@ router.post('/api/import', async (req, res) => {
 
                 if (existing) {
                     if (mode === 'replace') {
-                        db.updateTarget(target.id, {
+                        await db.updateTarget(target.id, {
                             nickname: target.nickname,
                             baseUrl: target.baseUrl,
                             tags: target.tags || [],
@@ -116,7 +116,7 @@ router.post('/api/import', async (req, res) => {
                     }
                 } else {
                     const newId = target.id || `target-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-                    db.createTarget({
+                    await db.createTarget({
                         id: newId,
                         nickname: target.nickname,
                         baseUrl: target.baseUrl,
