@@ -1,4 +1,5 @@
 import express from 'express';
+import cors from 'cors';
 import fs from 'fs/promises';
 import fsSync from 'fs';
 import path from 'path';
@@ -13,6 +14,14 @@ const __dirname = path.dirname(__filename);
 
 const app = express();
 const PORT = 4000;
+
+// Browser agents (RUM) call this from the app's own origin, never flux's own —
+// same CORS config as server.js's admin API, needed here too since this is the
+// process that actually handles /v1/browser/* and every other ingest path.
+app.use(cors({
+    origin: true,
+    credentials: true
+}));
 
 // Middleware to parse JSON bodies (with loose content-length check)
 app.use(express.json({
@@ -143,6 +152,12 @@ async function initialize() {
             delete responseHeaders['content-length'];
             delete responseHeaders['content-encoding'];
             delete responseHeaders['transfer-encoding'];
+            delete responseHeaders['access-control-allow-origin'];
+            delete responseHeaders['access-control-allow-credentials'];
+            delete responseHeaders['access-control-allow-methods'];
+            delete responseHeaders['access-control-allow-headers'];
+            delete responseHeaders['access-control-expose-headers'];
+            delete responseHeaders['access-control-max-age'];
 
             const status = results?.response?.status;
             const validStatus = (typeof status === 'number' && status >= 100 && status < 600) ? status : 200;
