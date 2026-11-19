@@ -167,6 +167,11 @@ async function initialize() {
             return res.status(503).json({ error: 'Proxy not initialized' });
         }
 
+        // Forwards started now would outlive the drain deadline already announced to server.js
+        if (shuttingDown) {
+            return res.status(503).set('Connection', 'close').json({ error: 'Proxy is shutting down' });
+        }
+
         try {
             // Extract request components
             const originalRequest = {
