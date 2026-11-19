@@ -13,6 +13,7 @@ import targetsRoutes from './api/targets.js';
 import dataTransferRoutes from './api/data-transfer.js';
 import configRoutes from './api/config.js';
 import { Worker } from 'worker_threads';
+import { setTimeout as sleep } from 'timers/promises';
 import logger from './lib/logger.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -134,13 +135,37 @@ let serverInstance;
 let worker;
 let shuttingDown = false;
 
+// A worker stuck in synchronous script code never answers, so the parent bounds the wait itself
+const WORKER_ACK_TIMEOUT_MS = 5000;
+const WORKER_EXIT_GRACE_MS = 1000;
+
 async function stopWorker() {
     if (!worker) {
         return;
     }
     const exited = new Promise(resolve => worker.once('exit', resolve));
+    const draining = new Promise(resolve => {
+        worker.on('message', (msg) => {
+            if (msg?.type === 'draining') {
+                resolve(msg.deadline);
+            }
+        });
+    });
     worker.postMessage({ type: 'shutdown' });
-    await exited;
+
+    const deadline = await Promise.race([
+        draining,
+        exited.then(() => Date.now()),
+        sleep(WORKER_ACK_TIMEOUT_MS).then(() => Date.now())
+    ]);
+    const finished = await Promise.race([
+        exited.then(() => true),
+        sleep(Math.max(0, deadline - Date.now()) + WORKER_EXIT_GRACE_MS).then(() => false)
+    ]);
+    if (!finished && worker) {
+        logger.error('[Shutdown] Proxy worker did not stop in time, terminating it');
+        await worker.terminate();
+    }
 }
 
 async function shutdown() {

@@ -237,6 +237,7 @@ async function shutdown() {
     server?.close();
 
     const deadline = Math.max(Date.now(), ...pendingWork.values());
+    parentPort?.postMessage({ type: 'draining', deadline });
     while (pendingWork.size > 0 && Date.now() < deadline) {
         logger.info(`[Proxy Worker] Waiting for ${pendingWork.size} in-flight request(s) and forward(s) to finish...`);
         await Promise.race([Promise.allSettled(pendingWork.keys()), sleep(deadline - Date.now())]);
