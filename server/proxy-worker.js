@@ -17,6 +17,11 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = 4000;
 
+app.use((_req, res, next) => {
+    trackPending(new Promise(resolve => res.on('close', resolve)));
+    next();
+});
+
 // Browser agents (RUM) call this from the app's own origin, never flux's own —
 // same CORS config as server.js's admin API, needed here too since this is the
 // process that actually handles /v1/browser/* and every other ingest path.
@@ -40,13 +45,13 @@ let distributor;
 let config;
 let server;
 let shuttingDown = false;
-const inFlightForwards = new Set();
+const pendingWork = new Set();
 
-function trackForward(promise) {
+function trackPending(promise) {
     // Errors surface through the request handler; this copy only tracks settlement for the shutdown drain
     const settled = promise.then(() => {}, () => {});
-    inFlightForwards.add(settled);
-    settled.then(() => inFlightForwards.delete(settled));
+    pendingWork.add(settled);
+    settled.then(() => pendingWork.delete(settled));
 }
 
 function logForwardOutcome(allResults, duration, respondedIn) {
@@ -174,7 +179,7 @@ async function initialize() {
 
             logger.info('📡 [Proxy Worker] Broadcasting to all targets...');
             const forwarding = distributor.broadcast(originalRequest, originalRequest);
-            trackForward(forwarding.then(({ completion }) => completion));
+            trackPending(forwarding.then(({ completion }) => completion));
 
             const { response, completion } = await forwarding;
             const respondedIn = Date.now() - startTime;
@@ -232,9 +237,9 @@ async function shutdown() {
     server?.close();
 
     const deadline = Date.now() + (config?.requestTimeout || 30000) + (config?.scriptTimeout || 5000);
-    while (inFlightForwards.size > 0 && Date.now() < deadline) {
-        logger.info(`[Proxy Worker] Waiting for ${inFlightForwards.size} in-flight forward(s) to finish...`);
-        await Promise.race([Promise.allSettled(inFlightForwards), sleep(deadline - Date.now())]);
+    while (pendingWork.size > 0 && Date.now() < deadline) {
+        logger.info(`[Proxy Worker] Waiting for ${pendingWork.size} in-flight request(s) and forward(s) to finish...`);
+        await Promise.race([Promise.allSettled(pendingWork), sleep(deadline - Date.now())]);
     }
 
     db.close();
