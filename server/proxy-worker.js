@@ -45,12 +45,12 @@ let distributor;
 let config;
 let server;
 let shuttingDown = false;
-const pendingWork = new Set();
+const pendingWork = new Map();
 
 function trackPending(promise) {
     // Errors surface through the request handler; this copy only tracks settlement for the shutdown drain
     const settled = promise.then(() => {}, () => {});
-    pendingWork.add(settled);
+    pendingWork.set(settled, Date.now() + (distributor ? distributor.timeout + distributor.scriptTimeout : 35000));
     settled.then(() => pendingWork.delete(settled));
 }
 
@@ -236,10 +236,10 @@ async function shutdown() {
     logger.info('\n👋 Gracefully shutting down...');
     server?.close();
 
-    const deadline = Date.now() + (distributor ? distributor.timeout + distributor.scriptTimeout : 35000);
+    const deadline = Math.max(Date.now(), ...pendingWork.values());
     while (pendingWork.size > 0 && Date.now() < deadline) {
         logger.info(`[Proxy Worker] Waiting for ${pendingWork.size} in-flight request(s) and forward(s) to finish...`);
-        await Promise.race([Promise.allSettled(pendingWork), sleep(deadline - Date.now())]);
+        await Promise.race([Promise.allSettled(pendingWork.keys()), sleep(deadline - Date.now())]);
     }
 
     db.close();
