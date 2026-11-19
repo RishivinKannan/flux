@@ -144,6 +144,15 @@ async function initialize() {
     // Initialize script loader
     await scriptLoader.initialize();
 
+    // Health check for worker
+    app.get('/health', (req, res) => {
+        res.json({
+            status: 'ok',
+            worker: true,
+            targets: config?.targets?.length || 0
+        });
+    });
+
     // Proxy route handler - matches ALL paths
     app.all(/^\/.*/, async (req, res) => {
         const startTime = Date.now();
@@ -198,15 +207,6 @@ async function initialize() {
                 message: err.message
             });
         }
-    });
-
-    // Health check for worker
-    app.get('/health', (req, res) => {
-        res.json({
-            status: 'ok',
-            worker: true,
-            targets: config?.targets?.length || 0
-        });
     });
 
     server = app.listen(PORT, () => {
