@@ -50,7 +50,7 @@ class ResponseSelector {
             case 'mock':
                 return !config.mockResponse || config.mockForce === true || hasSuccess;
             case 'specific':
-                return Boolean(config.selectedTargetId) && responses.some(r => r.targetId === config.selectedTargetId && !r.dropped);
+                return Boolean(config.selectedTargetId) && responses.some(r => r.targetId === config.selectedTargetId && !r.dropped && !r.skipped);
             default:
                 return hasSuccess;
         }
