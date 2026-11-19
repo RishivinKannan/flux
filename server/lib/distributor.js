@@ -8,10 +8,32 @@ import db from './database.js';
 const gunzipAsync = promisify(gunzip);
 const gzipAsync = promisify(gzip);
 
+// Module-level because proxy-worker rebuilds the Distributor on every config reload
+const inFlightByTarget = new Map();
+
 class Distributor {
     constructor(config) {
         this.targets = config.targets;
         this.timeout = config.requestTimeout || 30000;
+        this.maxInFlightPerTarget = config.maxInFlightPerTarget || 200;
+    }
+
+    acquireSlot(target) {
+        const active = inFlightByTarget.get(target.id) || 0;
+        if (active >= this.maxInFlightPerTarget) {
+            return false;
+        }
+        inFlightByTarget.set(target.id, active + 1);
+        return true;
+    }
+
+    releaseSlot(target) {
+        const active = (inFlightByTarget.get(target.id) || 1) - 1;
+        if (active > 0) {
+            inFlightByTarget.set(target.id, active);
+        } else {
+            inFlightByTarget.delete(target.id);
+        }
     }
 
     /**
@@ -50,67 +72,75 @@ class Distributor {
 
         const requireScriptMatch = db.getConfig('requireScriptMatch') === true;
 
-        const promises = this.targets.map((target, index) => {
+        const settled = {};
+        let responded = false;
+        let resolveResponse;
+        let rejectResponse;
+        const responsePromise = new Promise((resolve, reject) => {
+            resolveResponse = resolve;
+            rejectResponse = reject;
+        });
+
+        const respond = (results) => {
+            responded = true;
+            try {
+                resolveResponse(responseSelector.selectResponse(results, activeResponseConfig, { timestamps }).response);
+            } catch (err) {
+                rejectResponse(err);
+            }
+        };
+
+        const respondIfDecided = () => {
+            if (!responded && responseSelector.canDecide(settled, activeResponseConfig)) {
+                respond({ ...settled });
+            }
+        };
+
+        respondIfDecided();
+
+        const tasks = this.targets.map((target) => {
             const key = this.getTargetKey(target);
+            const record = (entry) => {
+                timestamps[key] = Date.now() - startTime;
+                settled[key] = entry;
+                respondIfDecided();
+                return { key, entry };
+            };
 
             if (requireScriptMatch) {
                 const matching = scriptLoader.default.getMatchingScriptsForTarget(requestPath, target.tags || []);
                 if (!matching || matching.length === 0) {
-                    timestamps[key] = Date.now() - startTime;
                     logger.info(`🚫 [Distributor] Skipping target "${key}": no matching script for path "${requestPath}" (Strict Mode enabled)`);
-                    return Promise.resolve({
-                        result: { status: 0, error: 'Skipped: No matching script for target', body: null, targetId: target.id, skipped: true },
-                        target,
-                        key
-                    });
+                    return Promise.resolve(record({ status: 0, error: 'Skipped: No matching script for target', body: null, targetId: target.id, skipped: true }));
                 }
             }
 
-            return this.sendToTarget(target, originalRequest, originalReq).then(result => {
-                // Track when this response completed
-                timestamps[key] = Date.now() - startTime;
-                return { result, target, key };
-            }).catch(error => {
-                timestamps[key] = Date.now() - startTime;
-                return { error, target, key };
-            });
-        });
-
-        // Wait for all requests to complete (or fail)
-        const results = await Promise.allSettled(promises);
-
-        // Aggregate results by nickname or hostname
-        const aggregated = {};
-
-        results.forEach((result) => {
-            if (result.status === 'fulfilled') {
-                const { result: targetResult, error, target, key } = result.value;
-
-                if (error) {
-                    aggregated[key] = {
-                        status: 0,
-                        error: error.message,
-                        body: null,
-                        targetId: target.id
-                    };
-                } else {
-                    aggregated[key] = {
-                        ...targetResult,
-                        targetId: target.id
-                    };
-                }
-            } else {
-                // This shouldn't happen with the new structure, but handle it anyway
-                logger.error('[Distributor] Unexpected promise rejection:', result.reason);
+            if (!this.acquireSlot(target)) {
+                logger.warn(`⚠️ [Distributor] Dropping target "${key}": ${this.maxInFlightPerTarget} requests already in flight`);
+                return Promise.resolve(record({ status: 0, error: 'Dropped: in-flight limit reached', body: null, targetId: target.id, dropped: true }));
             }
+
+            return this.sendToTarget(target, originalRequest, originalReq)
+                .then(
+                    result => ({ ...result, targetId: target.id }),
+                    error => ({ status: 0, error: error.message, body: null, targetId: target.id })
+                )
+                .finally(() => this.releaseSlot(target))
+                .then(record);
         });
 
-        // Apply response selection strategy from matching script
-        return responseSelector.selectResponse(
-            aggregated,
-            activeResponseConfig,
-            { timestamps }
-        );
+        const completion = Promise.all(tasks).then((entries) => {
+            const aggregated = {};
+            for (const { key, entry } of entries) {
+                aggregated[key] = entry;
+            }
+            if (!responded) {
+                respond(aggregated);
+            }
+            return aggregated;
+        });
+
+        return { response: await responsePromise, completion };
     }
 
     /**

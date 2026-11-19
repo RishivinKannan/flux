@@ -107,7 +107,7 @@ const start = async () => {
 
         // Start Proxy Worker
         console.log('Starting Proxy Worker...');
-        const worker = new Worker(path.join(__dirname, 'proxy-worker.js'));
+        worker = new Worker(path.join(__dirname, 'proxy-worker.js'));
 
         worker.on('message', (msg) => {
             logger.info('[Worker]', msg);
@@ -118,6 +118,7 @@ const start = async () => {
         });
 
         worker.on('exit', (code) => {
+            worker = null;
             if (code !== 0)
                 logger.error(new Error(`Worker stopped with exit code ${code}`));
         });
@@ -130,8 +131,25 @@ const start = async () => {
 
 // Handle shutdown gracefully
 let serverInstance;
-process.on('SIGINT', async () => {
+let worker;
+let shuttingDown = false;
+
+async function stopWorker() {
+    if (!worker) {
+        return;
+    }
+    const exited = new Promise(resolve => worker.once('exit', resolve));
+    worker.postMessage({ type: 'shutdown' });
+    await exited;
+}
+
+async function shutdown() {
+    if (shuttingDown) {
+        return;
+    }
+    shuttingDown = true;
     logger.info('\n\n👋 Gracefully shutting down...');
+    await stopWorker();
     if (serverInstance) {
         serverInstance.close(() => {
             process.exit(0);
@@ -139,6 +157,9 @@ process.on('SIGINT', async () => {
     } else {
         process.exit(0);
     }
-});
+}
+
+process.on('SIGINT', shutdown);
+process.on('SIGTERM', shutdown);
 
 start();

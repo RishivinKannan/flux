@@ -36,6 +36,20 @@ class ResponseSelector {
         };
     }
 
+    canDecide(results, config) {
+        const responses = Object.values(results);
+        const hasSuccess = responses.some(r => r.status >= 200 && r.status < 300);
+
+        switch (config?.strategy || 'first') {
+            case 'mock':
+                return !config.mockResponse || config.mockForce === true || hasSuccess;
+            case 'specific':
+                return Boolean(config.selectedTargetId) && responses.some(r => r.targetId === config.selectedTargetId);
+            default:
+                return hasSuccess;
+        }
+    }
+
     /**
      * Select response from a specific target
      */
