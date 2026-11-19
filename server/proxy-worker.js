@@ -123,7 +123,7 @@ async function loadConfig() {
         const port = db.getConfig('port') || 4000;
         const requestTimeout = db.getConfig('requestTimeout') || 30000;
         const scriptTimeout = db.getConfig('scriptTimeout') || 5000;
-        const maxInFlightPerTarget = db.getConfig('maxInFlightPerTarget') || 200;
+        const maxInFlightPerTarget = db.getConfig('maxInFlightPerTarget');
 
         config = {
             port,

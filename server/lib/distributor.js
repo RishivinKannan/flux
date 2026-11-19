@@ -15,7 +15,8 @@ class Distributor {
     constructor(config) {
         this.targets = config.targets;
         this.timeout = config.requestTimeout || 30000;
-        this.maxInFlightPerTarget = config.maxInFlightPerTarget || 200;
+        const cap = Number(config.maxInFlightPerTarget);
+        this.maxInFlightPerTarget = Number.isFinite(cap) && cap >= 1 ? Math.floor(cap) : 200;
     }
 
     acquireSlot(target) {
