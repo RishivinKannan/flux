@@ -17,6 +17,23 @@ class Distributor {
         this.timeout = config.requestTimeout || 30000;
         const cap = Number(config.maxInFlightPerTarget);
         this.maxInFlightPerTarget = Number.isFinite(cap) && cap >= 1 ? Math.floor(cap) : 200;
+        const scriptTimeout = Number(config.scriptTimeout);
+        this.scriptTimeout = Number.isFinite(scriptTimeout) && scriptTimeout > 0 ? scriptTimeout : 5000;
+    }
+
+    async withScriptTimeout(work, target) {
+        let timer;
+        const timeout = new Promise((_, reject) => {
+            timer = setTimeout(
+                () => reject(new Error(`Transformation scripts for ${target.nickname || target.baseUrl} timed out after ${this.scriptTimeout}ms`)),
+                this.scriptTimeout
+            );
+        });
+        try {
+            return await Promise.race([work, timeout]);
+        } finally {
+            clearTimeout(timer);
+        }
     }
 
     acquireSlot(target) {
@@ -168,24 +185,27 @@ class Distributor {
             const skippedScripts = [];
 
             // Apply each matching script sequentially
-            for (const scriptName of matchingScripts) {
-                // Check if script has a path pattern
-                const metadata = scriptLoader.default.getScriptMetadata(scriptName);
-                if (metadata && metadata.pathPattern) {
-                    if (!scriptLoader.default.matchPathPattern(metadata.pathPattern, originalReq.path)) {
-                        logger.debug(`  Skipping script ${scriptName} (Path pattern mismatch: ${metadata.pathPattern} vs ${originalReq.path})`);
-                        skippedScripts.push({ name: scriptName, reason: `path pattern mismatch (${metadata.pathPattern})` });
-                        continue;
+            const runScripts = async () => {
+                for (const scriptName of matchingScripts) {
+                    // Check if script has a path pattern
+                    const metadata = scriptLoader.default.getScriptMetadata(scriptName);
+                    if (metadata && metadata.pathPattern) {
+                        if (!scriptLoader.default.matchPathPattern(metadata.pathPattern, originalReq.path)) {
+                            logger.debug(`  Skipping script ${scriptName} (Path pattern mismatch: ${metadata.pathPattern} vs ${originalReq.path})`);
+                            skippedScripts.push({ name: scriptName, reason: `path pattern mismatch (${metadata.pathPattern})` });
+                            continue;
+                        }
                     }
-                }
 
-                transformedRequest = await transformationEngine.transform(
-                    transformedRequest,
-                    scriptName,
-                    target.metadata || {}
-                );
-                appliedScripts.push(scriptName);
-            }
+                    transformedRequest = await transformationEngine.transform(
+                        transformedRequest,
+                        scriptName,
+                        target.metadata || {}
+                    );
+                    appliedScripts.push(scriptName);
+                }
+            };
+            await this.withScriptTimeout(runScripts(), target);
 
             if (process.env.LOG_VERBOSE === 'true' || process.env.LOG_VERBOSE?.toLowerCase() === 'true') {
                 const tagsStr = Array.isArray(target.tags) ? target.tags.join(', ') : (target.tags || 'none');

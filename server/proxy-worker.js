@@ -236,7 +236,7 @@ async function shutdown() {
     logger.info('\n👋 Gracefully shutting down...');
     server?.close();
 
-    const deadline = Date.now() + (config?.requestTimeout || 30000) + (config?.scriptTimeout || 5000);
+    const deadline = Date.now() + (distributor ? distributor.timeout + distributor.scriptTimeout : 35000);
     while (pendingWork.size > 0 && Date.now() < deadline) {
         logger.info(`[Proxy Worker] Waiting for ${pendingWork.size} in-flight request(s) and forward(s) to finish...`);
         await Promise.race([Promise.allSettled(pendingWork), sleep(deadline - Date.now())]);
