@@ -17,6 +17,12 @@ class ResponseSelector {
         const strategy = config?.strategy || 'first';
         logger.info(`[Response Selector] Applying strategy: ${strategy}`);
         let selectedResponse;
+        if (this.isOverloaded(results)) {
+            return {
+                response: this.selectOverloadResponse(),
+                results
+            };
+        }
         // Use the safe variable
         switch (strategy) {
             case 'specific':
@@ -36,6 +42,35 @@ class ResponseSelector {
         };
     }
 
+    canDecide(results, config) {
+        const responses = Object.values(results);
+        const hasSuccess = responses.some(r => r.status >= 200 && r.status < 300);
+
+        switch (config?.strategy || 'first') {
+            case 'mock':
+                return !config.mockResponse || config.mockForce === true || hasSuccess;
+            case 'specific':
+                return Boolean(config.selectedTargetId) && responses.some(r => r.targetId === config.selectedTargetId && !r.dropped && !r.skipped);
+            default:
+                return hasSuccess;
+        }
+    }
+
+    isOverloaded(results) {
+        const responses = Object.values(results);
+        return responses.some(r => r.dropped) && responses.every(r => r.dropped || r.skipped);
+    }
+
+    selectOverloadResponse() {
+        logger.warn('[Response Selector] Every target is at its in-flight limit, returning 503');
+        return {
+            strategy: 'overload',
+            status: 503,
+            statusText: 'Service Unavailable',
+            body: { error: 'All targets are at their in-flight limit' }
+        };
+    }
+
     /**
      * Select response from a specific target
      */
@@ -49,7 +84,7 @@ class ResponseSelector {
         // The results object uses nickname or hostname as keys, so we need to find the matching one
         const targetResponse = Object.entries(results).find(([key, value]) => {
             // Check if the key matches the selected target ID or nickname
-            return value.targetId === config.selectedTargetId;
+            return value.targetId === config.selectedTargetId && !value.dropped;
         });
 
         if (targetResponse) {

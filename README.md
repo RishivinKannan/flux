@@ -18,7 +18,7 @@ A production-ready Node.js proxy server that broadcasts HTTP requests to multipl
 
 ## 📋 Requirements
 
-- Node.js 18+ (for native fetch support)
+- Node.js 24+
 - npm or yarn
 
 ## 🚀 Quick Start

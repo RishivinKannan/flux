@@ -13,6 +13,7 @@ import targetsRoutes from './api/targets.js';
 import dataTransferRoutes from './api/data-transfer.js';
 import configRoutes from './api/config.js';
 import { Worker } from 'worker_threads';
+import { setTimeout as sleep } from 'timers/promises';
 import logger from './lib/logger.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -107,7 +108,7 @@ const start = async () => {
 
         // Start Proxy Worker
         console.log('Starting Proxy Worker...');
-        const worker = new Worker(path.join(__dirname, 'proxy-worker.js'));
+        worker = new Worker(path.join(__dirname, 'proxy-worker.js'));
 
         worker.on('message', (msg) => {
             logger.info('[Worker]', msg);
@@ -118,6 +119,7 @@ const start = async () => {
         });
 
         worker.on('exit', (code) => {
+            worker = null;
             if (code !== 0)
                 logger.error(new Error(`Worker stopped with exit code ${code}`));
         });
@@ -130,8 +132,49 @@ const start = async () => {
 
 // Handle shutdown gracefully
 let serverInstance;
-process.on('SIGINT', async () => {
+let worker;
+let shuttingDown = false;
+
+// A worker stuck in synchronous script code never answers, so the parent bounds the wait itself
+const WORKER_ACK_TIMEOUT_MS = 5000;
+const WORKER_EXIT_GRACE_MS = 1000;
+
+async function stopWorker() {
+    if (!worker) {
+        return;
+    }
+    const exited = new Promise(resolve => worker.once('exit', resolve));
+    const draining = new Promise(resolve => {
+        worker.on('message', (msg) => {
+            if (msg?.type === 'draining') {
+                resolve(msg.deadline);
+            }
+        });
+    });
+    worker.postMessage({ type: 'shutdown' });
+
+    const deadline = await Promise.race([
+        draining,
+        exited.then(() => Date.now()),
+        sleep(WORKER_ACK_TIMEOUT_MS).then(() => Date.now())
+    ]);
+    const finished = await Promise.race([
+        exited.then(() => true),
+        sleep(Math.max(0, deadline - Date.now()) + WORKER_EXIT_GRACE_MS).then(() => false)
+    ]);
+    if (!finished && worker) {
+        logger.error('[Shutdown] Proxy worker did not stop in time, terminating it');
+        await worker.terminate();
+    }
+}
+
+async function shutdown() {
+    if (shuttingDown) {
+        return;
+    }
+    shuttingDown = true;
     logger.info('\n\n👋 Gracefully shutting down...');
+    await stopWorker();
     if (serverInstance) {
         serverInstance.close(() => {
             process.exit(0);
@@ -139,6 +182,9 @@ process.on('SIGINT', async () => {
     } else {
         process.exit(0);
     }
-});
+}
+
+process.on('SIGINT', shutdown);
+process.on('SIGTERM', shutdown);
 
 start();
