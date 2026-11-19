@@ -24,10 +24,11 @@ class Distributor {
     async withScriptTimeout(work, target) {
         let timer;
         const timeout = new Promise((_, reject) => {
-            timer = setTimeout(
-                () => reject(new Error(`Transformation scripts for ${target.nickname || target.baseUrl} timed out after ${this.scriptTimeout}ms`)),
-                this.scriptTimeout
-            );
+            timer = setTimeout(() => {
+                const err = new Error(`Transformation scripts for ${target.nickname || target.baseUrl} timed out after ${this.scriptTimeout}ms`);
+                err.code = 'SCRIPT_TIMEOUT';
+                reject(err);
+            }, this.scriptTimeout);
         });
         try {
             return await Promise.race([work, timeout]);
@@ -141,7 +142,9 @@ class Distributor {
             return this.sendToTarget(target, originalRequest, originalReq)
                 .then(
                     result => ({ ...result, targetId: target.id }),
-                    error => ({ status: 0, error: error.message, body: null, targetId: target.id })
+                    error => (error.code === 'SCRIPT_TIMEOUT'
+                        ? { status: 504, statusText: 'Gateway Timeout', error: error.message, body: { error: 'Transformation scripts timed out' }, targetId: target.id }
+                        : { status: 0, error: error.message, body: null, targetId: target.id })
                 )
                 .finally(() => this.releaseSlot(target))
                 .then(record);
